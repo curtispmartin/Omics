@@ -40,6 +40,10 @@ else:
     alpha = 0.05
     print(f'\nSetting alpha to {alpha:0.2f}...')
 
+
+### NEW FEATURE: IMPORT PARAMETER FILE FOR SMOOTHER PROCESSING
+
+
 ### set threshold for determining "high fold-change"
 if '--fc' in dict_args.keys():
     fcthresh = float(dict_args['--fc'])
@@ -206,8 +210,6 @@ df_vol = data.copy()
 df_vol = df_vol[['Accession','GenSymbol']].join(df_sub)
 
 ### calculate log2(FC) = log2 of fold-change
-# df_vol['Mean_Grp1'] = df_vol[l_psmcols1].mean(axis=1)
-# df_vol['Mean_Grp2'] = df_vol[l_psmcols2].mean(axis=1)
 df_vol['Mean_Grp1'] = df_vol[l_nsafcols1].mean(axis=1)
 df_vol['Mean_Grp2'] = df_vol[l_nsafcols2].mean(axis=1)
 df_vol['FC'] = df_vol['Mean_Grp2'] / df_vol['Mean_Grp1'] # interpreting FC to mean from grp1 --> grp2
@@ -223,8 +225,8 @@ df_vol['-log10(p-adj)'] = -np.log10(df_vol['p-adj'])
 
 ### add flag for "high fold-change" based on user-defined threshold
 fcthresh_log2 = np.log2(fcthresh)
-df_vol.loc[df_vol[np.abs(df_vol['log2(FC)']) > fcthresh_log2].index, 'HighFC'] = 1
-df_vol.loc[df_vol[np.abs(df_vol['log2(FC)']) <= fcthresh_log2].index, 'HighFC'] = 0
+df_vol.loc[df_vol[np.abs(df_vol['log2(FC)']) > fcthresh_log2].index, 'HighFC'] = 1 
+df_vol.loc[df_vol[np.abs(df_vol['log2(FC)']) <= fcthresh_log2].index, 'HighFC'] = 0 
 
 ### join to rest of data, then sort for simpler selection of important genes
 df_vol = df_vol.join(data.loc[:, [col for col in data.columns if col not in df_vol.columns]])
@@ -325,13 +327,25 @@ if label_flag == 1:
 else:
     plt.savefig(f'{path_outp}/{oname}_volcano-adj-nolabel.png', bbox_inches='tight', dpi=300)
 # plt.show()
-#----------------------------------------------------------------------------#
 
+### create output frame
+df_outp = df_vol.sort_values('FC').copy()
 
-### spit out file for set enrichment analysis
-with open(f'{path_outp}/{oname}_ranked.txt', 'w') as text:
-    for entry in df_vol[df_vol['HighFC'] == 1]['Accession'].tolist():
-        text.write(f'{entry}\n')
+### provide reference list for performing analyses against
+df_outp['Accession'].to_csv(f'{path_outp}/{oname}_ref.txt', sep='\t', header=False, index=False)
+
+### provide ranked list of proteins for use w overrepresentation analysis (ORA) in PANTHER
+df_outp[df_outp['HighFC'] == 1]['Accession'].to_csv(f'{path_outp}/{oname}_ora.txt', sep='\t', header=False, index=False)
+
+### provide ranked list of proteins for use w enrichment (FCA) analysis in PANTHER
+df_outp[['Accession', 'FC']].dropna().to_csv(f'{path_outp}/{oname}_sea.txt', sep='\t', header=False, index=False)
+# df_outp.to_string(f'{path_outp}/{oname}_ranked.txt', header=False, index=False)
+# with open(f'{path_outp}/{oname}_ranked.txt', 'w') as text:
+#     for idx, entry in df_outp.iterrows():
+#         entryA = entry['Accession']
+#         entryB = entry['FC']
+#         text.write(f'{entryA}\t{entryB}\n')
+#----------------------------------------------------------------------------#  
 
 
 
