@@ -30,7 +30,6 @@ import seaborn as sns
 ### get & format user inputs
 filepath = os.path.abspath(sys.argv[1])
 dict_args = dict(arg.split('=') for arg in sys.argv[2:])
-# print(dict_args)
 
 ### set confidence for determining "statistical significance"
 if '--alpha' in dict_args.keys():
@@ -66,7 +65,6 @@ filename = os.path.split(filepath)[-1].split('.')[0]
 path_data = os.path.split(filepath)[0]
 
 ### have the user select which sheet in data
-# datasheets = pd.Series(pd.ExcelFile(f'{path_data}/{filename}.xlsx').sheet_names)
 datasheets = pd.Series(pd.ExcelFile(filepath).sheet_names)
 sheetname = datasheets.loc[int(input(f'\n{datasheets}\n\nSelect index of sheet to use for analysis:\t'))]
 #----------------------------------------------------------------------------#
@@ -75,11 +73,9 @@ sheetname = datasheets.loc[int(input(f'\n{datasheets}\n\nSelect index of sheet t
 ##### LOAD, CLEAN, & SELECT DATA
 #----------------------------------------------------------------------------#
 ### load data
-# data = pd.read_excel(io=f'{path_data}/{filename}.xlsx', sheet_name=sheetname)
 data = pd.read_excel(io=filepath, sheet_name=sheetname)
 
 ### define & make output directory... helps keep things organized!
-# path_outp = f'{os.getcwd()}/Output/{filename}'
 path_outp = os.path.join(os.getcwd(), 'Output', filename)
 if not os.path.exists(path_outp):
     os.mkdir(path_outp)
@@ -138,8 +134,6 @@ if not df1.index.equals(df2.index):
 ### add pseudo-count to PSMs to remove infinite fold-change; requires treatment of missing data, per above
 df1 += 1
 df2 += 1
-# print(df1.describe())
-# print(df2.describe())
 #----------------------------------------------------------------------------#
 
 
@@ -149,8 +143,7 @@ df2 += 1
 def normalize(df, data, col, plen='# AAs'):
 
 ### join amino acid counts to frame for metric generation
-#     df = df.join(data['# AAs']) # THIS IS NOT NECESSARILY A STANDARD COLUMN!! NEED TO GENERALIZE!
-    df = df.join(data[plen]) # THIS IS NOT NECESSARILY A STANDARD COLUMN!! NEED TO GENERALIZE!
+    df = df.join(data[plen]) # WILL NEED TO GENERALIZE NORMALIZATION CONSTANT INPUT
 
 ### generate new metrics needed to normalize data
     df_norm = pd.DataFrame()
@@ -193,8 +186,6 @@ df_sub['p-value'] = l_pvals
 # df_sub['k'] = np.arange(1, m+1, 1)
 # df_sub['p-adj'] = df_sub['p-value'] * (m / df_sub['k']) # now this should be compared against alpha
 df_sub['p-adj'] = smsm.multipletests(df_sub['p-value'], alpha=alpha, method='fdr_bh')[1] # now this should be compared against alpha
-# df_sub = df_sub.sort_index()
-
 print(f'\nBonferroni-adjusted significance level:\t{smsm.multipletests(df_sub["p-value"], alpha=alpha, method="fdr_bh")[3]:.5f}\n(just a ballpark check, Benjamini-Hochberg used here)')
 #----------------------------------------------------------------------------#
 
@@ -220,18 +211,32 @@ df_vol['-log10(p)'] = -np.log10(df_vol['p-value'])
 df_vol['-log10(p-adj)'] = -np.log10(df_vol['p-adj'])
 
 ### add flag for "statistical significance" based on user-defined alpha
-# df_vol.loc[df_vol[df_vol['p-value'] <= alpha].index, 'Significance'] = 'Y'
-# df_vol.loc[df_vol[df_vol['p-value'] > alpha].index, 'Significance'] = 'N'
+df_vol.loc[df_vol[df_vol['p-value'] <= alpha].index, 'p-Sig'] = 1
+df_vol.loc[df_vol[df_vol['p-value'] > alpha].index, 'p-Sig'] = 0
+
+## add flag for "statistical significance" based on user-defined BH-corrected alpha
+df_vol.loc[df_vol[df_vol['p-adj'] <= alpha].index, 'BH-Sig'] = 1
+df_vol.loc[df_vol[df_vol['p-adj'] > alpha].index, 'BH-Sig'] = 0
 
 ### add flag for "high fold-change" based on user-defined threshold
 fcthresh_log2 = np.log2(fcthresh)
 df_vol.loc[df_vol[np.abs(df_vol['log2(FC)']) > fcthresh_log2].index, 'HighFC'] = 1 
 df_vol.loc[df_vol[np.abs(df_vol['log2(FC)']) <= fcthresh_log2].index, 'HighFC'] = 0 
 
+### add flag for high fold-change & high significance, based on user definitions
+# df_vol.loc[df_vol[df_vol[['HighFC', 'p-Sig']].sum(axis=1) == 2].index, 'POI'] = 1
+# df_vol.loc[df_vol[df_vol[['HighFC', 'p-Sig']].sum(axis=1) != 2].index, 'POI'] = 0
+
 ### join to rest of data, then sort for simpler selection of important genes
 df_vol = df_vol.join(data.loc[:, [col for col in data.columns if col not in df_vol.columns]])
-# df_vol = df_vol.sort_values(['HighFC', 'FC', '-log10(p-adj)'], ascending=False).reset_index(drop=True)
-df_vol = df_vol.sort_values(['HighFC', '-log10(p-adj)', 'FC'], ascending=False).reset_index(drop=True)
+df_vol = df_vol.sort_values(['BH-Sig', 'p-Sig', 'HighFC', '-log10(p-adj)', 'FC'], ascending=False).reset_index(drop=True)
+
+### add column for defining hue later
+df_vol.loc[df_vol[(df_vol['HighFC'] == 1) & (df_vol['p-Sig'] == 0)].index, 'Hue'] = 1
+df_vol.loc[df_vol[(df_vol['HighFC'] == 0) & (df_vol['p-Sig'] == 1)].index, 'Hue'] = 2
+df_vol.loc[df_vol[(df_vol['HighFC'] == 1) & (df_vol['p-Sig'] == 1)].index, 'Hue'] = 3
+df_vol.loc[df_vol[(df_vol['HighFC'] == 1) & (df_vol['BH-Sig'] == 1)].index, 'Hue'] = 4
+df_vol['Hue'] = df_vol['Hue'].fillna(0)
 #----------------------------------------------------------------------------#
 
 
@@ -250,32 +255,25 @@ ymin_fc = -np.log10(alpha) / (ymax - ymin)
 ymax_fc = 0.95
 
 ### make a volcano plot w/ p-values
-palette = {1:'firebrick', 0:'Silver'}
+# palette = {0:'#feedde', 1:'#fdbe85', 2:'#fd8d3c', 3:'#e6550d', 4:'#a63603'} # oranges
+# palette = {0:'#f2f0f7', 1:'#cbc9e2', 2:'#9e9ac8', 3:'#756bb1', 4:'#54278f'} # purples
+palette = {0:'#eff3ff', 1:'#bdd7e7', 2:'#6baed6', 3:'#3182bd', 4:'#08519c'} # blues
+markers = {0:'o', 1:'h', 2:'X', 3:'d', 4:'P'}
 fig, ax = plt.subplots(1, 1, figsize=(8,6))
 
-sns.scatterplot(x='log2(FC)', y='-log10(p)', hue='HighFC', data=df_vol, palette=palette, s=20, edgecolor=None, lw=0, ax=ax)
-# ax.axhline(y=-np.log10(alpha), xmin=xmin_alpha, xmax=0.5-xmax_alpha, color='C3', ls='--')
-# ax.axhline(y=-np.log10(alpha), xmin=0.5+xmax_alpha, xmax=1.0-xmin_alpha, color='C3', ls='--')
-# ax.axvline(x=-fcthresh_log2, ymin=ymin_fc, ymax=ymax_fc, color='C3', ls='--')
-# ax.axvline(x=fcthresh_log2, ymin=ymin_fc, ymax=ymax_fc, color='C3', ls='--')
-
+sns.scatterplot(x='log2(FC)', y='-log10(p)', hue='Hue', style='Hue', data=df_vol, palette=palette, markers=markers, edgecolor='black', linewidth=0.25, s=16, legend=False, ax=ax)
 if label_flag == 1:
-    print('\nWorking on the labels...\n')
-    for idx in range(df_vol.shape[0])[:100]:
-        x = 0.05+df_vol.loc[idx, 'log2(FC)']
+    print('\nWorking on the labels. They can take a minute...\n')
+    for idx in range(df_vol[df_vol['p-Sig'] == 1].shape[0])[:100]:
+        x = 0.075+df_vol.loc[idx, 'log2(FC)']
         y = df_vol.loc[idx, '-log10(p)']
         s = df_vol.loc[idx, 'GenSymbol']
-        if (pd.isnull(x)) | (pd.isnull(y)) | (pd.isnull(s)):
-            pass
-        else:
-            plt.text(x=x, y=y, s=s, fontdict=dict(color='k', size=5))
+        plt.text(x=x, y=y, s=s, fontdict=dict(color='k', size=4))
 
 ax.set_xlim([xmin, xmax])
 ax.set_xlabel('$log_{2}$(Fold Change)')
 ax.set_ylim([ymin, ymax])
 ax.set_ylabel('$-log_{10}$(p-value)')
-# plt.legend(title=f'$log_{2}$(FC) > {fcthresh_log2:0.2f}', loc='upper right')
-plt.legend(title=f'Fold change > {fcthresh}', loc='lower right', ncol=2)
 plt.title(f'Volcano Plot ({oname})')
 
 if label_flag == 1:
@@ -286,49 +284,45 @@ else:
 
 ### reorder columns & write data to file
 if label_flag == 1:
-    l_impcols = ['Accession', 'GenSymbol', 'FC', 'log2(FC)', 'p-value', '-log10(p)', 'p-adj', '-log10(p-adj)', 'Protein names']
+    l_impcols = ['Accession', 'GenSymbol', 'FC', 'log2(FC)', 'p-value', '-log10(p)', 'p-adj', '-log10(p-adj)', 'Protein names', 'HighFC', 'p-Sig', 'BH-Sig']
     df_vol = df_vol[l_impcols].join(df_vol.loc[:, ~df_vol.columns.isin(l_impcols)])
     df_vol.to_excel(f'{path_outp}/{oname}_processed.xlsx', index=False)
 
 
 ### make a volcano plot w/ adjusted p-values
-ymax = np.max(df_vol['-log10(p-adj)']) + 0.1
+# ymax = np.max(df_vol['-log10(p-adj)']) + 0.1
 
 # palette = {1:'firebrick', 0:'Silver'}
-fig, ax = plt.subplots(1, 1, figsize=(8,6))
+# fig, ax = plt.subplots(1, 1, figsize=(8,6))
 
-sns.scatterplot(x='log2(FC)', y='-log10(p-adj)', hue='HighFC', data=df_vol, palette=palette, s=20, edgecolor=None, lw=0, ax=ax)
-# ax.axhline(y=-np.log10(alpha), xmin=xmin_alpha, xmax=0.5-xmax_alpha, color='C3', ls='--')
-# ax.axhline(y=-np.log10(alpha), xmin=0.5+xmax_alpha, xmax=1.0-xmin_alpha, color='C3', ls='--')
-# ax.axvline(x=-fcthresh_log2, ymin=ymin_fc, ymax=ymax_fc, color='C3', ls='--')
-# ax.axvline(x=fcthresh_log2, ymin=ymin_fc, ymax=ymax_fc, color='C3', ls='--')
+# sns.scatterplot(x='log2(FC)', y='-log10(p-adj)', hue='Hue', style='Hue', data=df_vol, palette=palette, markers=markers, edgecolor='black', linewidth=0.25, s=15, legend=False, ax=ax)
+# if label_flag == 1:
+#     print('\nWorking on the labels. They can take a minute...\n')
+#     for idx in range(df_vol[df_vol['p-Sig'] == 1].shape[0])[:100]:
+#         x = 0.075+df_vol.loc[idx, 'log2(FC)']
+#         y = df_vol.loc[idx, '-log10(p)']
+#         s = df_vol.loc[idx, 'GenSymbol']
+#         plt.text(x=x, y=y, s=s, fontdict=dict(color='k', size=4))
 
-if label_flag == 1:
-#     print('\nWorking on the labels...\n')
-    for idx in range(df_vol.shape[0])[:100]:
-        x = 0.05+df_vol.loc[idx, 'log2(FC)']
-        y = df_vol.loc[idx, '-log10(p-adj)']
-        s = df_vol.loc[idx, 'GenSymbol']
-        if (pd.isnull(x)) | (pd.isnull(y)) | (pd.isnull(s)):
-            pass
-        else:
-            plt.text(x=x, y=y, s=s, fontdict=dict(color='k', size=5))
+# ax.set_xlim([xmin, xmax])
+# ax.set_xlabel('$log_{2}$(Fold Change)')
+# ax.set_ylim([ymin, ymax])
+# ax.set_ylabel('$-log_{10}$(p-value)')
+# plt.title(f'Volcano Plot ({oname})')
 
-ax.set_xlim([xmin, xmax])
-ax.set_xlabel('$log_{2}$(Fold Change)')
-ax.set_ylim([ymin, ymax])
-ax.set_ylabel('$-log_{10}$(Adjusted p-value)')
-# plt.legend(title=f'$log_{2}$(FC) > {fcthresh_log2:0.2f}', loc='upper right')
-plt.legend(title=f'Fold change > {fcthresh}', loc='lower right', ncol=2)
-plt.title(f'Volcano Plot ({oname})')
+# ax.set_xlim([xmin, xmax])
+# ax.set_xlabel('$log_{2}$(Fold Change)')
+# ax.set_ylim([ymin, ymax])
+# ax.set_ylabel('$-log_{10}$(Adjusted p-value)')
+# plt.title(f'Volcano Plot ({oname})')
 
-if label_flag == 1:
-    plt.savefig(f'{path_outp}/{oname}_volcano-adj.png', bbox_inches='tight', dpi=300)
-else:
-    plt.savefig(f'{path_outp}/{oname}_volcano-adj-nolabel.png', bbox_inches='tight', dpi=300)
+# if label_flag == 1:
+#     plt.savefig(f'{path_outp}/{oname}_volcano-adj.png', bbox_inches='tight', dpi=300)
+# else:
+#     plt.savefig(f'{path_outp}/{oname}_volcano-adj-nolabel.png', bbox_inches='tight', dpi=300)
 # plt.show()
 
-### create output frame
+### create frame for printing to output
 df_outp = df_vol.sort_values('FC').copy()
 
 ### provide reference list for performing analyses against
