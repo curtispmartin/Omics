@@ -37,11 +37,11 @@ if '-i' in dict_args.keys():
 
 ### set confidence level for "statistical significance"
     alpha = float(dict_params['Parameters']['alpha'])
-    print(f'\nAlpha = {alpha:0.2f}...')
+#     print(f'\nAlpha = {alpha:0.2f}...')
     
 ### set threshold for determining "high fold-change"
     fcthresh = float(dict_params['Parameters']['fcthresh'])
-    print(f'Fold-change = {fcthresh:0.2f}...')
+#     print(f'Fold-change = {fcthresh:0.2f}...')
     
 ### set flag for labeling points (0 means no label; 1 means label)
     label_flag = int(dict_params['Parameters']['label'])
@@ -67,23 +67,18 @@ if '-i' in dict_args.keys():
 ### otherwise provide inputs via bash
 else:
     path_inpu = os.path.abspath(dict_args['-f'])
-    print(path_inpu)
     
 ### set confidence level for "statistical significance"
     if '--alpha' in dict_args.keys():
         alpha = float(dict_args['--alpha'])
-        print(f'\nAlpha = {alpha:0.2f}...')
     else:
         alpha = 0.05
-        print(f'\nSetting alpha to {alpha:0.2f}...')
     
 ### set threshold for determining "high fold-change"
     if '--fc' in dict_args.keys():
         fcthresh = float(dict_args['--fc'])
-        print(f'Fold-change = {fcthresh:0.2f}...')
     else:
         fcthresh = 2.0
-        print(f'Setting fold-change threshold to {fcthresh:0.2f}...')
     
 ### set flag for labeling points (0 means no label; 1 means label)
     if '--label' in dict_args.keys():
@@ -129,11 +124,14 @@ else:
 
 ##### LOAD, CLEAN, & SELECT DATA
 #----------------------------------------------------------------------------#
+### provide feedback to user
+print(f'\nSetting alpha to:\t\t\t{alpha:0.2f}')
+print(f'Setting fold-change threshold to:\t{fcthresh:0.2f}')
+
 ### define & make output directory... helps keep things organized!
 path_outp = os.path.join(os.getcwd(), 'Output', name_inpu)
 if not os.path.exists(path_outp):
     os.mkdir(path_outp)
-
 
 ### select data of interest
 df1 = data[l_psmcols1].copy()
@@ -355,8 +353,11 @@ if label_flag == 1:
 ### create frame for printing to output
 df_outp = df_volc.sort_values('FC').copy()
 
-### provide reference list for performing analyses against
-df_outp['Accession'].to_csv(f'{path_outp}/{name_outp}_ref.txt', sep='\t', header=False, index=False)
+### get list of all proteins detected in experiment for use as reference in further analyses
+# df_outp['Accession'].to_csv(f'{path_outp}/{name_outp}_ref.txt', sep='\t', header=False, index=False)
+df_outp_ref = data[(data[l_psmcols1 + l_psmcols2].fillna(0.0).sum(axis=1) != 0)]['Accession'].sort_values() # can't use df1/df2 b/c of filtering procedure... need all proteins detected in experiment
+# print(df_outp_ref)
+df_outp_ref.to_csv(f'{path_outp}/{name_outp}_ref.txt', sep='\t', header=False, index=False)
 
 ### provide ranked list of proteins for use w overrepresentation analysis (ORA) in PANTHER
 df_outp[df_outp['HighFC'] == 1]['Accession'].to_csv(f'{path_outp}/{name_outp}_ora.txt', sep='\t', header=False, index=False)
