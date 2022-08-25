@@ -26,6 +26,107 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
+##### CREATE CLASS FOR HANDLING PROTEOMICS DATA
+#----------------------------------------------------------------------------#
+### create `omics` class 
+class omics:
+    '''
+    Handles & analyzes proteomics data. 
+    
+    REQUIREMENTS:
+        1. Mass spectrometry (MS) data w spectral counts. 
+    '''
+    
+### initialization parameters
+    def __init__(self, df=None):
+        '''
+        - df: MS data (pandas.DataFrame)
+        '''
+        
+### define some attributes which allow for data tracking
+        self.source_data = df.copy()
+
+
+### process the data... REMOVE LOW-VALUE ENTRIES, ADD PSEUDO-COUNTS, ETC.
+
+
+### normalize data (normalized spectral abundance factor, or nSAF)
+    def gen_nSAF(self, df=None, cols=None, plen='# AAs'):
+        '''
+        '''
+    
+### join protein lengths to frame 
+        df = df.join(self.experi_data[plen]) 
+    
+### generate new metrics needed to normalize data
+        df_norm = pd.DataFrame()
+        
+        for col in cols:
+            df_norm[f'{col}_SAF'] = df[col] / df[plen] # spectral counts over protein length
+            df_norm[f'{col}_nSAF'] = df_norm[f'{col}_SAF'] / df_norm[f'{col}_SAF'].sum() # normalized SAF 
+        
+        return(df_norm)
+
+
+### run statistical test for determining differential expression (t-test)
+
+
+
+### run statistical test for determining differential expression (LIMMA)
+
+
+
+### generate volcano plot
+
+
+
+### analyze data from experiment... CALL OTHER FUNCTIONS FOR DATA PROCESSING?
+    def experiment(self, first=None, second=None, names=None):
+        '''
+        Use this to do preliminary checks on data.
+        - first: Columns definining first condition for testing (list-like)
+        - second: Columns defining second condition for testing (list-like)
+        - names: column providing protein names (str, preferably accession)
+        '''
+ 
+### make sure conditionsa are lists
+        first = list(first)
+        second = list(second)
+        
+### create new data set from source w deduplicated protein names as index
+        if self.source_data[names].duplicated().sum() > 0:
+            raise Warning('\nDuplicate protein names. Keeping first instance...')
+            self.experi_data = self.source_data[~self.source_data.duplicated()].sort_index().copy()
+        else:            
+            self.experi_data = self.source_data.set_index(names).sort_index().copy()
+ 
+### define new data split by treatment
+        self.first_data = self.experi_data[first].copy()
+        self.second_data = self.experi_data[second].copy()
+        
+### process & format data...
+        self.first_data = self.gen_nSAF(self.first_data, cols=first) # or something like this...
+        
+        
+        
+
+#----------------------------------------------------------------------------#
+
+### pull data for testing
+path_data = 'Data/KB-Appendix17-P798-16-IPs-Summary-Comparison.xlsx'
+df = pd.read_excel(io=path_data, sheet_name='Summary_Comparison')
+
+path_params = 'Data/Params/20220815_22Rv1_UN_IACS.json'
+dict_params = json.load(open(path_params))
+
+### instantiate class object using data
+test = omics(df=df)
+test.experiment(first=dict_params['Treatments']['1'], second=dict_params['Treatments']['2'], names='Accession')
+
+
+sys.exit()
+
+
 ##### MAXIMIZE USER INPUT TO IMPROVE WORKFLOW GENERALIZATION
 #----------------------------------------------------------------------------#
 dict_args = dict(arg.split('=') for arg in sys.argv[1:])
@@ -64,61 +165,7 @@ if '-i' in dict_args.keys():
     data = pd.read_excel(io=path_inpu, sheet_name=name_sheet)
     
     
-### otherwise provide inputs via bash
-else:
-    path_inpu = os.path.abspath(dict_args['-f'])
-    
-### set confidence level for "statistical significance"
-    if '--alpha' in dict_args.keys():
-        alpha = float(dict_args['--alpha'])
-    else:
-        alpha = 0.05
-    
-### set threshold for determining "high fold-change"
-    if '--fc' in dict_args.keys():
-        fcthresh = float(dict_args['--fc'])
-    else:
-        fcthresh = 2.0
-    
-### set flag for labeling points (0 means no label; 1 means label)
-    if '--label' in dict_args.keys():
-        label_flag = 0
-        print('Not labeling points...')
-    else:
-        label_flag = 1
 
-### get filename & path to data from user input
-    name_inpu = os.path.split(path_inpu)[-1].split('.')[0]
-    path_data = os.path.split(path_inpu)[0]
-
-### have the user select which sheet in data
-    datasheets = pd.Series(pd.ExcelFile(path_inpu).sheet_names)
-    name_sheet = datasheets.loc[int(input(f'\n{datasheets}\n\nSelect index of sheet to use for analysis:\t'))]
-    
-### identify condition columns either through script call or via interactive input
-    if '--cond1' in dict_args.keys():
-        l_psmcols1 = dict_args['--cond1'].split(',')
-    else:
-        l_psmcols1 = input(f'\n{pd.Series(data.columns)}\n\nSelect PSM data for first sample:\t\t').split()
-    
-    if '--cond2' in dict_args.keys():
-        l_psmcols2 = dict_args['--cond2'].split(',')
-    else:
-        l_psmcols2 = input(f'\n{pd.Series(data.columns)}\n\nSelect PSM data for second sample:\t\t').split()
-
-### load data
-    data = pd.read_excel(io=path_inpu, sheet_name=name_sheet)
-        
-### convert indices to integers
-    l_psmcols1 = [int(i) for i in l_psmcols1]
-    l_psmcols2 = [int(i) for i in l_psmcols2]
-    
-### convert indices to columns
-    l_psmcols1 = data.columns[l_psmcols1]
-    l_psmcols2 = data.columns[l_psmcols2]
-    
-### get desired name for output files
-    name_outp = input('Provide name for output files:\t\t\t')
 #----------------------------------------------------------------------------#
 
 
@@ -317,38 +364,6 @@ if label_flag == 1:
     df_volc = df_volc[l_impcols].join(df_volc.loc[:, ~df_volc.columns.isin(l_impcols)])
     df_volc.to_excel(f'{path_outp}/{name_outp}_processed.xlsx', index=False)
 
-### make a volcano plot w/ adjusted p-values
-# ymax = np.max(df_volc['-log10(p-adj)']) + 0.1
-
-# palette = {1:'firebrick', 0:'Silver'}
-# fig, ax = plt.subplots(1, 1, figsize=(8,6))
-
-# sns.scatterplot(x='log2(FC)', y='-log10(p-adj)', hue='Hue', style='Hue', data=df_volc, palette=palette, markers=markers, edgecolor='black', linewidth=0.25, s=15, legend=False, ax=ax)
-# if label_flag == 1:
-#     print('\nWorking on the labels. They can take a minute...\n')
-#     for idx in range(df_volc[df_volc['p-Sig'] == 1].shape[0])[:100]:
-#         x = 0.075+df_volc.loc[idx, 'log2(FC)']
-#         y = df_volc.loc[idx, '-log10(p)']
-#         s = df_volc.loc[idx, 'GenSymbol']
-#         plt.text(x=x, y=y, s=s, fontdict=dict(color='k', size=4))
-
-# ax.set_xlim([xmin, xmax])
-# ax.set_xlabel('$log_{2}$(Fold Change)')
-# ax.set_ylim([ymin, ymax])
-# ax.set_ylabel('$-log_{10}$(p-value)')
-# plt.title(f'Volcano Plot ({name_outp})')
-
-# ax.set_xlim([xmin, xmax])
-# ax.set_xlabel('$log_{2}$(Fold Change)')
-# ax.set_ylim([ymin, ymax])
-# ax.set_ylabel('$-log_{10}$(Adjusted p-value)')
-# plt.title(f'Volcano Plot ({name_outp})')
-
-# if label_flag == 1:
-#     plt.savefig(f'{path_outp}/{name_outp}_volcano-adj.png', bbox_inches='tight', dpi=300)
-# else:
-#     plt.savefig(f'{path_outp}/{name_outp}_volcano-adj-nolabel.png', bbox_inches='tight', dpi=300)
-# plt.show()
 
 ### create frame for printing to output
 df_outp = df_volc.sort_values('FC').copy()
