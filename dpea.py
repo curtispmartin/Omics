@@ -171,7 +171,7 @@ df2 += 1
 ##### RUN STATISTICAL TEST, CORRECTED FOR MULTIPLE HYPOTHESIS TESTING
 #----------------------------------------------------------------------------#
 ### create function for generating normalize spectral abundance factor (nSAF)
-def normalize(df, data, col, plen='# AAs'):
+def gen_nSAF(df, data, col, plen='# AAs'):
 
 ### join amino acid counts to frame for metric generation
     df = df.join(data[plen]) # WILL NEED TO GENERALIZE NORMALIZATION CONSTANT INPUT
@@ -185,9 +185,9 @@ def normalize(df, data, col, plen='# AAs'):
 
 ### normalize PSM --> nSAF
 for col in df1.columns:
-    df1 = df1.join(normalize(df1, data, col, plen=plen))
+    df1 = df1.join(gen_nSAF(df1, data, col, plen=plen))
 for col in df2.columns:
-    df2 = df2.join(normalize(df2, data, col, plen=plen))
+    df2 = df2.join(gen_nSAF(df2, data, col, plen=plen))
     
 ### get nSAF columns for statistical tests & plotting later
 l_nsafcols1 = [col for col in df1.columns if 'nSAF' in col]

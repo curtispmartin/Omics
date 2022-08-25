@@ -1,4 +1,4 @@
-name: myenv
+name: omicsenv
 channels:
   - conda-forge
   - defaults
@@ -246,4 +246,4 @@ dependencies:
     - unicodedata2==14.0.0
     - watchdog==2.1.7
     - wrapt==1.14.0
-prefix: /Users/martincup/opt/miniconda3/envs/myenv
+prefix: /Users/martincup/opt/miniconda3/envs/omicsenv
