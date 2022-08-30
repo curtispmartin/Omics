@@ -64,27 +64,40 @@ class dpea:
 
 
 ### process the data... remove consistently low-value entries & add pseudocounts
-    def clean(self, nfloor=10, pseudocount=1):
+    def clean(self, nfloor=10, pseudocount=1, **kwargs):     
         '''
 
         Parameters
         ----------
         nfloor : integer, optional
-            DESCRIPTION. Threshold for removing low-value data. If the sum of all spectral counts is less than this value for this experiment (both treatments), this entry is removed. The default is 10.
+            Threshold for removing low-value data. If the sum of all spectral counts is less than this value for this experiment (both treatments), this entry is removed. The default is 10.
         pseudocount : integer, optional
-            DESCRIPTION. Value to add to spectral counts of zero in order to prevent infinite fold-change calculations. The default is 1.
+            Value to add to spectral counts of zero in order to prevent infinite fold-change calculations. The default is 1.
+        **kwargs : pd.DataFrame, optional
+            Can provide new data for cleaning using 'first' & 'second' options, like in experiment() method. 
 
         Returns
         -------
-        Dataframes for each treatment.
+        self.
 
         '''
+        
+### check to see if user provided new data for cleaning
+        if 'first' in kwargs.keys():
+            if hasattr(self, 'first_data'):
+                print('\nWarning: Copying over data provided in experiment() call.')
+            self.first_data = kwargs['first']            
+            
+        if 'second' in kwargs.keys():
+            if hasattr(self, 'second_data'):
+                print('\nWarning: Copying over data provided in experiment() call.')
+            self.second_data = kwargs['second']
+
 ### fill N/A w/ zeros... ASSUMES BLANK VALUES CAN BE INTERPRETED AS NOT DETECTED
         self.first_data = self.first_data.fillna(0.0)
         self.second_data = self.second_data.fillna(0.0)
 
 ### remove entries where sum of PSM count < `nfloor` (10 by default)... a heuristic which seems to work OK
-#         idx_keep = ((self.first_data.sum(axis=1) >= nfloor) & (self.second_data.sum(axis=1) >= nfloor))
         idx_keep = self.first_data.join(self.second_data).sum(axis=1) >= nfloor
         self.first_data = self.first_data[idx_keep].copy()
         self.second_data = self.second_data[idx_keep].copy()
@@ -101,14 +114,36 @@ class dpea:
         self.first_data += pseudocount
         self.second_data += pseudocount      
         
-        return(self.first_data, self.second_data)
+        return(self)
 #----------------------------------------------------------------------------#
         
 
 ### normalize data (normalized spectral abundance factor, or nSAF)
-    def gen_nSAF(self, plen='# AAs'):
+    def norm_nSAF(self, plen='# AAs', **kwargs):
         '''
         '''
+
+### check to see if user provided new data for cleaning
+        if 'first' in kwargs.keys():
+            if hasattr(self, 'first_data'):
+                print('\nWarning: Copying over data provided in experiment() call.')
+            self.first_data = kwargs['first']            
+            
+        if 'second' in kwargs.keys():
+            if hasattr(self, 'second_data'):
+                print('\nWarning: Copying over data provided in experiment() call.')
+            self.second_data = kwargs['second']
+
+### allow user to provide experimental data            
+#         if 'experi' in kwargs.keys():
+#             if hasattr(self, 'experi_data'):
+#                 print('\nWarning: Copying over data provided in experiment() call.')
+            
+### check to make sure data provided matches `first` & `second` datasets
+#             if kwargs['experi'].shape[0] != self.first_data.shape[0]:
+#                 raise Exception('\nExperimental data provided does not match treatment data. Exiting...')
+
+#             self.experi_data = kwargs['experi']
 
 ### join protein lengths to frame 
         df1 = self.first_data.join(self.experi_data[plen]) 
@@ -134,12 +169,41 @@ class dpea:
         self.first_data = df1[df1.columns[df1.columns != plen]].join(df1_norm)
         self.second_data = df2[df2.columns[df2.columns != plen]].join(df2_norm)
         
-        return(self.first_data, self.second_data)
+        return(self)
 #----------------------------------------------------------------------------#
  
 
 ### run statistical test for determining differential expression (t-test)
-    def ttest(self, alpha=0.05, correction='BH', labels=None):
+    def ttest(self, alpha=0.05, correction='BH', labels=None, **kwargs):
+        '''
+
+        Parameters
+        ----------
+        alpha : float, required
+            Significance threshold for t-test, not adjusted for multiple comparisons. The default is 0.05.
+        correction : string, optional... LIKELY A PROBLEM FOR THE VOLCANO PLOT
+            DESCRIPTION. The default is 'BH'.
+        labels : TYPE, optional
+            DESCRIPTION. The default is None.
+        **kwargs : pd.DataFrame, optional
+            Can provide new data for cleaning using 'first' & 'second' options, like in experiment() method. 
+
+        Returns
+        -------
+        self.
+
+        '''
+        
+### check to see if user provided new data for cleaning
+        if 'first' in kwargs.keys():
+            if hasattr(self, 'first_data'):
+                print('\nWarning: Copying over data provided in experiment() call.')
+            self.first_data = kwargs['first']            
+            
+        if 'second' in kwargs.keys():
+            if hasattr(self, 'second_data'):
+                print('\nWarning: Copying over data provided in experiment() call.')
+            self.second_data = kwargs['second']
         
 ### assign attributes for future use
         self.alpha = alpha
@@ -172,12 +236,67 @@ class dpea:
         if labels:
             self.results = self.experi_data[[labels]].join(self.results, how='right')
 
-        return(self.results)
+        return(self)
 #----------------------------------------------------------------------------#
 
 
 ### run statistical test for determining differential expression (LIMMA)... GONNA BE TOUGH
 
+#----------------------------------------------------------------------------#
+
+
+### set everything up for interpreting & analyzing experimental data
+    def experiment(self, first=None, second=None, names=None): 
+        '''
+        
+        Parameters
+        ----------
+        first : list, required
+            List of columns definining first condition for testing. The default is None.
+        second : list, required
+            List of columns defining second condition for testing. The default is None.
+        names : str, required
+            Name for column defining some sort of protein identifier (e.g., accession). The default is None.
+
+        Returns
+        -------
+        self.
+
+        '''
+
+### assign attributes for future use
+        self.names = names
+ 
+### make sure conditionsa are lists
+        self.first_cols = list(first)
+        self.second_cols = list(second)
+        
+### create new data set from source w deduplicated protein names as index
+        if self.source_data[names].duplicated().sum() > 0:
+            raise Warning('\nDuplicate protein names. Keeping first instance...')
+            self.experi_data = self.source_data[~self.source_data.duplicated()].sort_index().copy()
+        else:            
+            self.experi_data = self.source_data.set_index(names).sort_index().copy()
+ 
+### define new data split by treatment
+        self.first_data = self.experi_data[self.first_cols].copy()
+        self.second_data = self.experi_data[self.second_cols].copy()
+
+### clean data & deal w missing entries
+#         self.clean(nfloor=10, pseudocount=1)
+
+### normalize data
+#         self.norm_nSAF(plen='# AAs')
+
+### test for statistical significance... T-TEST RIGHT NOW... ALSO DEFINITELY WANT TO BE ABLE TO USE THIS OUTSIDE OF EXPERIMENT FUNCTION
+#         self.ttest(alpha=0.05, correction='BH', labels='GenSymbol')
+        
+### generate data for overrepresentation analysis
+
+
+### generate data for enrichment analysis
+        
+        return(self) # return self to enable compound method calls
 #----------------------------------------------------------------------------#
 
 
@@ -213,6 +332,7 @@ class dpea:
 ### add flag for "statistical significance" based on user-defined alpha
         if not alpha:
             alpha = self.alpha
+
         df_volc.loc[df_volc[df_volc['p-value'] <= alpha].index, 'p-Sig'] = 1
         df_volc.loc[df_volc[df_volc['p-value'] > alpha].index, 'p-Sig'] = 0
 
@@ -274,65 +394,7 @@ class dpea:
         plt.title(f'Volcano Plot')
         plt.show()
         
-
-### reorder columns & write data to file
-#         if labels:
-#             l_impcols = [labels] + ['FC', 'log2(FC)', 'p-value', '-log10(p)', 'p-adj', '-log10(p-adj)', 'HighFC', 'p-Sig', 'BH-Sig', 'Mean_Grp1', 'Mean_Grp2'] + self.first_cols + self.l_nsafcols1 + self.second_cols + self.l_nsafcols2
-#         else:
-#             l_impcols = [self.labels] + ['FC', 'log2(FC)', 'p-value', '-log10(p)', 'p-adj', '-log10(p-adj)', 'HighFC', 'p-Sig', 'BH-Sig', 'Mean_Grp1', 'Mean_Grp2'] + self.first_cols + self.l_nsafcols1 + self.second_cols + self.l_nsafcols2
-#         df_volc = df_volc[l_impcols].join(df_volc.loc[:, ~df_volc.columns.isin(l_impcols)])
-        
-#         self.processed_data = df_volc
-        
         return(fig) # return figure so user can save as s/he wants
-#----------------------------------------------------------------------------#
-
-
-### analyze data from experiment... CALL OTHER FUNCTIONS FOR DATA PROCESSING? ADD MORE INPUTS?
-    def experiment(self, first=None, second=None, names=None): # MIGHT NEED TO INCORPORATE PLEN HERE
-        '''
-        Use this to do preliminary checks on data.
-        - first: Columns definining first condition for testing (list-like)
-        - second: Columns defining second condition for testing (list-like)
-        - names: column providing protein names (str, preferably accession)
-        '''
-        
-### assign attributes for future use
-        self.names = names
-        
-### incorpote (& encourage!) use of json file containing experiment parameters
-#         if self.params:
- 
-### make sure conditionsa are lists
-        self.first_cols = list(first)
-        self.second_cols = list(second)
-        
-### create new data set from source w deduplicated protein names as index
-        if self.source_data[names].duplicated().sum() > 0:
-            raise Warning('\nDuplicate protein names. Keeping first instance...')
-            self.experi_data = self.source_data[~self.source_data.duplicated()].sort_index().copy()
-        else:            
-            self.experi_data = self.source_data.set_index(names).sort_index().copy()
- 
-### define new data split by treatment
-        self.first_data = self.experi_data[self.first_cols].copy()
-        self.second_data = self.experi_data[self.second_cols].copy()
-
-### clean data & deal w missing entries
-        self.clean(nfloor=10, pseudocount=1)
-
-### normalize data
-        self.gen_nSAF(plen='# AAs')
-
-### test for statistical significance... T-TEST RIGHT NOW... ALSO DEFINITELY WANT TO BE ABLE TO USE THIS OUTSIDE OF EXPERIMENT FUNCTION
-        self.ttest(alpha=0.05, correction='BH', labels='GenSymbol')
-        
-### generate data for overrepresentation analysis
-
-
-### generate data for enrichment analysis
-        
-        return(self) # do I need or want this?
 #----------------------------------------------------------------------------#
 
 

@@ -43,25 +43,38 @@ path_data = os.path.split(dict_params['Metadata']['Data'])[0]
 path_inpu = os.path.join(os.path.split(os.path.abspath(sys.argv[0]))[0], dict_params['Metadata']['Data'])
 name_outp = dict_params['Metadata']['Name']
 
-### set analysis parameters
-alpha = float(dict_params['Parameters']['alpha']) # confidence level
-fcthresh = float(dict_params['Parameters']['fcthresh']) # threshold for relevant fold-change
-plen = dict_params['Metadata']['Lengths']
 
+### create dpea object
+test = omics.dpea(df=df)
 
-### instantiate class object using data
+### define experiment
 first = dict_params['Treatments']['1']
 second = dict_params['Treatments']['2']
 names = 'Accession'
-test = omics.dpea(df=df)
 test = test.experiment(first=first, second=second, names=names)
 
-df_first = test.first_data
-df_second = test.second_data
-df_results = test.results
+### clean data
+test = test.clean(nfloor=10, pseudocount=1)
 
-fig = test.volcano(labels='GenSymbol')
+### normalize data
+plen = dict_params['Metadata']['Lengths']
+test = test.norm_nSAF(plen=plen)
+
+### run statistical test
+alpha = float(dict_params['Parameters']['alpha']) # confidence level
+test = test.ttest(alpha=alpha, correction='BH', labels='GenSymbol')
+
+### try running all steps in compound method
+# test = omics.dpea(df=df).experiment(first=first, second=second, names=names).clean(nfloor=10, pseudocount=1).norm_nSAF(plen='# AAs').ttest(alpha=0.05, correction='BH', labels='GenSymbol')
+
+### generate volcano plot
+fcthresh = float(dict_params['Parameters']['fcthresh']) # threshold for relevant fold-change
+fig = test.volcano(fcthresh=fcthresh, labels='GenSymbol')
 # fig.savefig(f'{name_outp}.png', bbox_inches='tight', dpi=300)
+
+
+
+
 
     
 
