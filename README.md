@@ -2,7 +2,7 @@
 Module for analyzing omics data written in Python.
 Will provide classes & functions for proteomics analysis, to start. 
 
-## `dpea.py`
+## `omics.py`
 Currently performs differential protein expression analysis using mass spectrometry data. 
 Highly suggest using `params.json` file as input; doing so provides reproducibility & is generally simpler. 
 However code can be used in command line w the following options:

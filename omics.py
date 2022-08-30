@@ -29,8 +29,8 @@ import seaborn as sns
 
 ##### CREATE CLASS FOR HANDLING PROTEOMICS DATA
 #----------------------------------------------------------------------------#
-### create `omics` class 
-class omics:
+### create `dpea` class for differential protein expression analysis
+class dpea:
     '''
     Handles & analyzes proteomics data. 
     
@@ -38,7 +38,7 @@ class omics:
         1. Mass spectrometry (MS) data w spectral counts. 
     '''
     
-### initialization parameters
+### initialization parameters... SHOULD I INCLUDE THESE PARAMETERS W THE EXPERIMENT FUNCTION INSTEAD?? THINK ABOUT HOW THIS WILL BE USED (NOT AS SINGLE SCRIPT, LIKE DONE BELOW)
 #     def __init__(self, df=None):
     def __init__(self, df=None, params=None):
         '''
@@ -139,7 +139,7 @@ class omics:
  
 
 ### run statistical test for determining differential expression (t-test)
-    def ttest(self, alpha=0.05, correction='BH'):
+    def ttest(self, alpha=0.05, correction='BH', labels=None):
                 
 ### get nSAF columns for statistical tests & plotting later
         self.l_nsafcols1 = [col for col in self.first_data.columns if 'nSAF' in col]
@@ -163,24 +163,24 @@ class omics:
             print(f'\nBonferroni-adjusted significance level:\t{smsm.multipletests(self.results["p-value"], alpha=alpha, method="fdr_bh")[3]:.5f}\n(just a ballpark check, Benjamini-Hochberg used here)')
         else:
             print('\nNo correction made for multiple comparisons...')
+            
+        if labels:
+            self.results = self.experi_data[[labels]].join(self.results, how='right')
 
         return(ttest)
 #----------------------------------------------------------------------------#
 
 
-### run statistical test for determining differential expression (LIMMA)
+### run statistical test for determining differential expression (LIMMA)... GONNA BE TOUGH
 
 #----------------------------------------------------------------------------#
 
 
 ### generate volcano plot
-    def volcano(self, alpha=0.05, fcthresh=2, labels='GenSymbol'):
-        
-### new frame for plotting
-        df_volc = self.experi_data.copy()
+    def volcano(self, alpha=0.05, fcthresh=2, labels=None):
 
-### create new frame for volcano plot
-        df_volc = df_volc[[labels]].join(self.results, how='right') # NEED TO GENERALIZE 'GENSYMBOL'
+### new frame for plotting
+        df_volc = self.experi_data[[col for col in self.experi_data.columns if col not in self.results.columns]].join(self.results, how='right')
 
 ### calculate log2(FC) = log2 of fold-change
         df_volc['Mean_Grp1'] = df_volc[self.l_nsafcols1].mean(axis=1)
@@ -237,13 +237,14 @@ class omics:
         fig, ax = plt.subplots(1, 1, figsize=(8,6))
         
         sns.scatterplot(x='log2(FC)', y='-log10(p)', hue='Hue', style='Hue', data=df_volc, palette=palette, markers=markers, edgecolor='black', linewidth=0.25, s=18, legend=False, ax=ax)
-#         if label_flag == 1:
-        print('\nWorking on the labels. Can take a minute...\n')
-        for idx in range(df_volc[df_volc['p-Sig'] == 1].shape[0])[:100]:
-            x = 0.075+df_volc.loc[idx, 'log2(FC)']
-            y = df_volc.loc[idx, '-log10(p)']
-            s = df_volc.loc[idx, 'GenSymbol']
-            plt.text(x=x, y=y, s=s, fontdict=dict(color='k', size=4))
+
+        if labels:
+            print('\nWorking on the labels. Can take a minute...\n')
+            for idx in range(df_volc[df_volc['p-Sig'] == 1].shape[0])[:100]:
+                x = 0.075+df_volc.loc[idx, 'log2(FC)']
+                y = df_volc.loc[idx, '-log10(p)']
+                s = df_volc.loc[idx, labels]
+                plt.text(x=x, y=y, s=s, fontdict=dict(color='k', size=4))
         
         ax.set_xlim([xmin, xmax])
         ax.set_xlabel('$log_{2}$(Fold Change)')
@@ -264,7 +265,8 @@ class omics:
 #             df_volc = df_volc[l_impcols].join(df_volc.loc[:, ~df_volc.columns.isin(l_impcols)])
 #             df_volc.to_excel(f'{path_outp}/{name_outp}_processed.xlsx', index=False)
 
-        return(df_volc)
+#         return(df_volc)
+        return(fig) # return figure so user can save as s/he wants
 #----------------------------------------------------------------------------#
 
 
@@ -302,7 +304,7 @@ class omics:
         self.gen_nSAF(plen='# AAs')
 
 ### test for statistical significance... T-TEST RIGHT NOW... ALSO DEFINITELY WANT TO BE ABLE TO USE THIS OUTSIDE OF EXPERIMENT FUNCTION
-        self.ttest(alpha=0.05, correction='BH')
+        self.ttest(alpha=0.05, correction='BH', labels='GenSymbol')
         
 ### generate data for overrepresentation analysis
 
@@ -321,12 +323,17 @@ path_params = 'Data/Params/20220815_22Rv1_UN_IACS.json'
 dict_params = json.load(open(path_params))
 
 ### instantiate class object using data
-test = omics(df=df).experiment(first=dict_params['Treatments']['1'], second=dict_params['Treatments']['2'], names='Accession')
+first = dict_params['Treatments']['1']
+second = dict_params['Treatments']['2']
+names = 'Accession'
+test = dpea(df=df).experiment(first=first, second=second, names=names)
 
 df_first = test.first_data
 df_second = test.second_data
+df_results = test.results
 
-test.volcano()
+fig = test.volcano(labels='GenSymbol')
+# fig.savefig('test.png', bbox_inches='tight', dpi=300)
 
 
 sys.exit()
