@@ -36,6 +36,19 @@ df = pd.read_excel(io=path_data, sheet_name='Summary_Comparison')
 path_params = 'Data/Params/20220815_22Rv1_UN_IACS.json'
 dict_params = json.load(open(path_params))
 
+### get IO variables
+name_inpu = os.path.split(dict_params['Metadata']['Data'])[-1].split('.')[0]
+name_sheet = dict_params['Metadata']['Sheet']
+path_data = os.path.split(dict_params['Metadata']['Data'])[0]
+path_inpu = os.path.join(os.path.split(os.path.abspath(sys.argv[0]))[0], dict_params['Metadata']['Data'])
+name_outp = dict_params['Metadata']['Name']
+
+### set analysis parameters
+alpha = float(dict_params['Parameters']['alpha']) # confidence level
+fcthresh = float(dict_params['Parameters']['fcthresh']) # threshold for relevant fold-change
+plen = dict_params['Metadata']['Lengths']
+
+
 ### instantiate class object using data
 first = dict_params['Treatments']['1']
 second = dict_params['Treatments']['2']
@@ -48,4 +61,7 @@ df_second = test.second_data
 df_results = test.results
 
 fig = test.volcano(labels='GenSymbol')
-fig.savefig('test.png', bbox_inches='tight', dpi=300)
+# fig.savefig(f'{name_outp}.png', bbox_inches='tight', dpi=300)
+
+    
+

@@ -337,101 +337,28 @@ class dpea:
 
 
 ### pull data for testing
-path_data = 'Data/KB-Appendix17-P798-16-IPs-Summary-Comparison.xlsx'
-df = pd.read_excel(io=path_data, sheet_name='Summary_Comparison')
+# path_data = 'Data/KB-Appendix17-P798-16-IPs-Summary-Comparison.xlsx'
+# df = pd.read_excel(io=path_data, sheet_name='Summary_Comparison')
 
-path_params = 'Data/Params/20220815_22Rv1_UN_IACS.json'
-dict_params = json.load(open(path_params))
+# path_params = 'Data/Params/20220815_22Rv1_UN_IACS.json'
+# dict_params = json.load(open(path_params))
 
 ### instantiate class object using data
-first = dict_params['Treatments']['1']
-second = dict_params['Treatments']['2']
-names = 'Accession'
-test = dpea(df=df)
-test.experiment(first=first, second=second, names=names)
+# first = dict_params['Treatments']['1']
+# second = dict_params['Treatments']['2']
+# names = 'Accession'
+# test = dpea(df=df)
+# test.experiment(first=first, second=second, names=names)
 
-df_first = test.first_data
-df_second = test.second_data
-df_results = test.results
+# df_first = test.first_data
+# df_second = test.second_data
+# df_results = test.results
 
-fig = test.volcano()
-fig.savefig('test.png', bbox_inches='tight', dpi=300)
-
-
-sys.exit()
-
-
-##### MAXIMIZE USER INPUT TO IMPROVE WORKFLOW GENERALIZATION
-#----------------------------------------------------------------------------#
-dict_args = dict(arg.split('=') for arg in sys.argv[1:])
-
-
-### NEW FEATURE: IMPORT PARAMETER FILE FOR SMOOTHER PROCESSING
-if '-i' in dict_args.keys():
-    dict_params = json.load(open(dict_args['-i']))
-
-### set confidence level for "statistical significance"
-    alpha = float(dict_params['Parameters']['alpha'])
-#     print(f'\nAlpha = {alpha:0.2f}...')
-    
-### set threshold for determining "high fold-change"
-    fcthresh = float(dict_params['Parameters']['fcthresh'])
-#     print(f'Fold-change = {fcthresh:0.2f}...')
-    
-### set flag for labeling points (0 means no label; 1 means label)
-    label_flag = int(dict_params['Parameters']['label'])
-
-### get columns required for analysis
-    l_psmcols1 = dict_params['Treatments']['1']
-    l_psmcols2 = dict_params['Treatments']['2']
-
-### get column for normalizing PSMs against protein length
-    plen = dict_params['Metadata']['Lengths']
-    
-### get IO variables
-    name_inpu = os.path.split(dict_params['Metadata']['Data'])[-1].split('.')[0]
-    name_sheet = dict_params['Metadata']['Sheet']
-    path_data = os.path.split(dict_params['Metadata']['Data'])[0]
-    path_inpu = os.path.join(os.path.split(os.path.abspath(sys.argv[0]))[0], dict_params['Metadata']['Data'])
-    name_outp = dict_params['Metadata']['Name']
-
-### load data
-    data = pd.read_excel(io=path_inpu, sheet_name=name_sheet)
-    
-    
-
-#----------------------------------------------------------------------------#
-
-
-##### LOAD, CLEAN, & SELECT DATA
-#----------------------------------------------------------------------------#
-
-
-### define & make output directory... helps keep things organized!
-path_outp = os.path.join(os.getcwd(), 'Output', name_inpu)
-if not os.path.exists(path_outp):
-    os.mkdir(path_outp)
-
-
-#----------------------------------------------------------------------------#
+# fig = test.volcano()
+# fig.savefig('test.png', bbox_inches='tight', dpi=300)
 
 
 
-### create frame for printing to output
-df_outp = df_volc.sort_values('FC').copy()
-
-### get list of all proteins detected in experiment for use as reference in further analyses
-# df_outp['Accession'].to_csv(f'{path_outp}/{name_outp}_ref.txt', sep='\t', header=False, index=False)
-df_outp_ref = data[(data[l_psmcols1 + l_psmcols2].fillna(0.0).sum(axis=1) != 0)]['Accession'].sort_values() # can't use df1/df2 b/c of filtering procedure... need all proteins detected in experiment
-# print(df_outp_ref)
-df_outp_ref.to_csv(f'{path_outp}/{name_outp}_ref.txt', sep='\t', header=False, index=False)
-
-### provide ranked list of proteins for use w overrepresentation analysis (ORA) in PANTHER
-df_outp[df_outp['HighFC'] == 1]['Accession'].to_csv(f'{path_outp}/{name_outp}_ora.txt', sep='\t', header=False, index=False)
-
-### provide ranked list of proteins for use w enrichment (FCA) analysis in PANTHER
-df_outp[['Accession', 'FC']].dropna().to_csv(f'{path_outp}/{name_outp}_sea.txt', sep='\t', header=False, index=False)
-#----------------------------------------------------------------------------#  
 
 
 
