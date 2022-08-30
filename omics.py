@@ -140,6 +140,10 @@ class dpea:
 
 ### run statistical test for determining differential expression (t-test)
     def ttest(self, alpha=0.05, correction='BH', labels=None):
+        
+### assign attributes for future use
+        self.alpha = alpha
+        self.labels = labels
                 
 ### get nSAF columns for statistical tests & plotting later
         self.l_nsafcols1 = [col for col in self.first_data.columns if 'nSAF' in col]
@@ -163,11 +167,12 @@ class dpea:
             print(f'\nBonferroni-adjusted significance level:\t{smsm.multipletests(self.results["p-value"], alpha=alpha, method="fdr_bh")[3]:.5f}\n(just a ballpark check, Benjamini-Hochberg used here)')
         else:
             print('\nNo correction made for multiple comparisons...')
-            
+
+### add labels to frame if included            
         if labels:
             self.results = self.experi_data[[labels]].join(self.results, how='right')
 
-        return(ttest)
+        return(self.results)
 #----------------------------------------------------------------------------#
 
 
@@ -177,7 +182,20 @@ class dpea:
 
 
 ### generate volcano plot
-    def volcano(self, alpha=0.05, fcthresh=2, labels=None):
+    def volcano(self, fcthresh=2, alpha=None, labels=None):
+        
+### check for results from statistical test
+        if not hasattr(self, 'results'):
+            raise Exception('\nWarning: Statistical test needs to be performed before generating volcano plot. Exiting...')
+            
+### check to make sure certain attributes are available
+#         if not hasattr(self, 'names'):
+#             raise Exception('\nWarning: Missing `names` attribute. Exiting...')
+
+### define labels if not provided explicitly in function
+        if not labels:
+            if hasattr(self, 'labels'):
+                labels = self.labels
 
 ### new frame for plotting
         df_volc = self.experi_data[[col for col in self.experi_data.columns if col not in self.results.columns]].join(self.results, how='right')
@@ -193,6 +211,8 @@ class dpea:
         df_volc['-log10(p-adj)'] = -np.log10(df_volc['p-adj'])
 
 ### add flag for "statistical significance" based on user-defined alpha
+        if not alpha:
+            alpha = self.alpha
         df_volc.loc[df_volc[df_volc['p-value'] <= alpha].index, 'p-Sig'] = 1
         df_volc.loc[df_volc[df_volc['p-value'] > alpha].index, 'p-Sig'] = 0
 
@@ -252,20 +272,18 @@ class dpea:
         ax.set_ylabel('$-log_{10}$(p-value)')
 #         plt.title(f'Volcano Plot ({name_outp})')
         plt.title(f'Volcano Plot')
-        
-#         if label_flag == 1:
-#             plt.savefig(f'{path_outp}/{name_outp}_volcano.png', bbox_inches='tight', dpi=300)
-#         else:
-#             plt.savefig(f'{path_outp}/{name_outp}_volcano-nolabel.png', bbox_inches='tight', dpi=300)
         plt.show()
         
-        ### reorder columns & write data to file
-#         if label_flag == 1:
-#             l_impcols = ['Accession', 'GenSymbol', 'FC', 'log2(FC)', 'p-value', '-log10(p)', 'p-adj', '-log10(p-adj)', 'Protein names', 'HighFC', 'p-Sig', 'BH-Sig']
-#             df_volc = df_volc[l_impcols].join(df_volc.loc[:, ~df_volc.columns.isin(l_impcols)])
-#             df_volc.to_excel(f'{path_outp}/{name_outp}_processed.xlsx', index=False)
 
-#         return(df_volc)
+### reorder columns & write data to file
+#         if labels:
+#             l_impcols = [labels] + ['FC', 'log2(FC)', 'p-value', '-log10(p)', 'p-adj', '-log10(p-adj)', 'HighFC', 'p-Sig', 'BH-Sig', 'Mean_Grp1', 'Mean_Grp2'] + self.first_cols + self.l_nsafcols1 + self.second_cols + self.l_nsafcols2
+#         else:
+#             l_impcols = [self.labels] + ['FC', 'log2(FC)', 'p-value', '-log10(p)', 'p-adj', '-log10(p-adj)', 'HighFC', 'p-Sig', 'BH-Sig', 'Mean_Grp1', 'Mean_Grp2'] + self.first_cols + self.l_nsafcols1 + self.second_cols + self.l_nsafcols2
+#         df_volc = df_volc[l_impcols].join(df_volc.loc[:, ~df_volc.columns.isin(l_impcols)])
+        
+#         self.processed_data = df_volc
+        
         return(fig) # return figure so user can save as s/he wants
 #----------------------------------------------------------------------------#
 
@@ -278,6 +296,9 @@ class dpea:
         - second: Columns defining second condition for testing (list-like)
         - names: column providing protein names (str, preferably accession)
         '''
+        
+### assign attributes for future use
+        self.names = names
         
 ### incorpote (& encourage!) use of json file containing experiment parameters
 #         if self.params:
@@ -326,14 +347,15 @@ dict_params = json.load(open(path_params))
 first = dict_params['Treatments']['1']
 second = dict_params['Treatments']['2']
 names = 'Accession'
-test = dpea(df=df).experiment(first=first, second=second, names=names)
+test = dpea(df=df)
+test.experiment(first=first, second=second, names=names)
 
 df_first = test.first_data
 df_second = test.second_data
 df_results = test.results
 
-fig = test.volcano(labels='GenSymbol')
-# fig.savefig('test.png', bbox_inches='tight', dpi=300)
+fig = test.volcano()
+fig.savefig('test.png', bbox_inches='tight', dpi=300)
 
 
 sys.exit()
@@ -383,9 +405,7 @@ if '-i' in dict_args.keys():
 
 ##### LOAD, CLEAN, & SELECT DATA
 #----------------------------------------------------------------------------#
-### provide feedback to user
-print(f'\nSetting alpha to:\t\t\t{alpha:0.2f}')
-print(f'Setting fold-change threshold to:\t{fcthresh:0.2f}')
+
 
 ### define & make output directory... helps keep things organized!
 path_outp = os.path.join(os.getcwd(), 'Output', name_inpu)
