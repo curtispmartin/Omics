@@ -22,6 +22,7 @@ import numpy as np
 
 import scipy.stats as stats
 import statsmodels.stats.multitest as smsm # this could be a challenge... worth it? 
+import sklearn.isotonic as skliso # utilize the isotonic regression function in place of natural cubic spline which isn't available
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -39,8 +40,8 @@ class dpea:
     '''
     
 ### initialization parameters... SHOULD I INCLUDE THESE PARAMETERS W THE EXPERIMENT FUNCTION INSTEAD?? THINK ABOUT HOW THIS WILL BE USED (NOT AS SINGLE SCRIPT, LIKE DONE BELOW)
-#     def __init__(self, df=None):
-    def __init__(self, df=None, params=None):
+    def __init__(self, df=None):
+#     def __init__(self, df=None, params=None):
         '''
 
         Parameters
@@ -61,6 +62,49 @@ class dpea:
 
 
 ### plot distributions for data
+
+#----------------------------------------------------------------------------#
+
+
+### set everything up for interpreting & analyzing experimental data
+    def experiment(self, first=None, second=None, names=None): 
+        '''
+        
+        Parameters
+        ----------
+        first : list, required
+            List of columns definining first condition for testing. The default is None.
+        second : list, required
+            List of columns defining second condition for testing. The default is None.
+        names : str, required
+            Name for column defining some sort of protein identifier (e.g., accession). The default is None.
+
+        Returns
+        -------
+        self.
+
+        '''
+
+### assign attributes for future use
+        self.names = names
+ 
+### make sure conditionsa are lists
+        self.first_cols = list(first)
+        self.second_cols = list(second)
+        
+### create new data set from source w deduplicated protein names as index
+        if self.source_data[names].duplicated().sum() > 0:
+            raise Warning('\nDuplicate protein names. Keeping first instance...')
+            self.experi_data = self.source_data[~self.source_data.duplicated()].sort_index().copy()
+        else:            
+            self.experi_data = self.source_data.set_index(names).sort_index().copy()
+ 
+### define new data split by treatment
+        self.first_data = self.experi_data[self.first_cols].copy()
+        self.second_data = self.experi_data[self.second_cols].copy()
+        
+        return(self) # return self to enable compound method calls
+#----------------------------------------------------------------------------#
 
 
 ### process the data... remove consistently low-value entries & add pseudocounts
@@ -219,9 +263,14 @@ class dpea:
 
 ### join data for further analysis
         self.results = self.first_data.join(self.second_data)
+
+### calculate fold change & ad to results frame
+        self.results['fold-change'] = self.second_data[self.l_nsafcols2].mean(axis=1) / self.first_data[self.l_nsafcols1].mean(axis=1)
+
+### add p-values
         self.results['p-value'] = l_pvals
 
-### implement Benjamini-Hochberg procedure to correct for multiple comparisons
+### implement Benjamini-Hochberg procedure to correct for multiple comparisons... BREAK THIS OUT??
 #         df_sub = df_sub.sort_values('p-value') 
 #         m = df_sub.shape[0] 
 #         df_sub['k'] = np.arange(1, m+1, 1)
@@ -240,63 +289,132 @@ class dpea:
 #----------------------------------------------------------------------------#
 
 
-### run statistical test for determining differential expression (LIMMA)... GONNA BE TOUGH
+### function for calculating q-values
+    def gen_qval(self, results=None, pval='p-value'):
+    
+### raise issue if p-values haven't been generated yet
+        if not results:
+            if not hasattr(self, 'results'):
+                raise Exception('\nData containing p-values required. Either provide using `results` parameter or run a statistical test first.\n\nExiting...')
+            else:
+                results = self.results
 
+### new dataframe for converting p- to q-values
+        df_q = results[[pval]].sort_values(pval).copy()
+    
+### define m as number of features under consideration
+        m = df_q.shape[0]
+
+### create a grid of hyperparameters, "lambda"
+        h_grid = np.arange(0,0.96,0.01)
+
+### estimate the expected proportion of null values, "pi0"
+        l_pi = [(np.sum(df_q[pval] > h) / (m * (1 - h))) for h in h_grid]
+
+### generate cubic spline of pi versus lambdas... NOT NATURAL, DESPITE OPTION; NOT SMOOTHED; POOR EXTRAPOLATION
+#         spline_pi = scint.CubicSpline(x=h_grid, y=l_pi, bc_type='natural')
+
+### train isotonic regression to estimate pi0... CURRENTLY UNTESTED WORKAROUND DUE TO LACK OF NORMAL CUBIC SPLINE IN PYTHON
+        regress_pi = skliso.IsotonicRegression(increasing=False).fit(h_grid, l_pi) # WHAT ABOUT A NORMAL POLYNOMIAL REGRESSION VIA SKLEARN?
+        pi0 = pd.Series(regress_pi.predict(h_grid)).value_counts().idxmax() # in essence, calulate the mode of the regression prediction
+
+
+### quick diagnostic plot for estimation of pi0 required in calculating q-values
+        df_plot = pd.DataFrame.from_dict({'lambda':h_grid, 'pi0':l_pi, 'pi0-model':regress_pi.predict(h_grid)})
+    
+        fig, ax = plt.subplots(1, 1, figsize=(10,6))
+        sns.scatterplot(x='lambda', y='pi0', data=df_plot, label='Data', ax=ax)
+        sns.lineplot(x='lambda', y='pi0-model', data=df_plot, label='Model', ax=ax)
+    
+        ax.set_xlim([0,1])
+        ax.set_ylim(top=1)
+        ax.set_xlabel('Lambda')
+        ax.set_ylabel('$\hat{\pi}_{0}$')
+        ax.set_title('Estimation of the Proportion of Null Features ($\hat{\pi}_{0}$) using Isotonic Regression')
+        plt.show()
+        del(df_plot)
+
+
+### calculate q-values
+        pm = pi0 * df_q.iloc[-1]['p-value']
+        l_p = df_q['p-value'].tolist()[::-1]
+        l_q = []
+        
+        for i,p in enumerate(l_p):
+            if i == 0:
+                l_q.append(pi0*m*p/(m-i)) # m-i instead of i b/c we reversed the order of p-values in l_p
+            else:
+                l_q.append(np.min([pi0*m*p/(m-i), l_q[i-1]])) # l_q[i-1] for comparison vice l_q[i+1] b/c we reversed the order of p-values in l_q
+        
+        df_q = df_q.sort_values('p-value', ascending=False)
+        df_q['q-value'] = l_q
+        df_q = df_q.sort_values('p-value')
+        
+        self.results['q-value'] = df_q['q-value']
+        
+        return(self)
 #----------------------------------------------------------------------------#
 
 
-### set everything up for interpreting & analyzing experimental data
-    def experiment(self, first=None, second=None, names=None): 
-        '''
-        
-        Parameters
-        ----------
-        first : list, required
-            List of columns definining first condition for testing. The default is None.
-        second : list, required
-            List of columns defining second condition for testing. The default is None.
-        names : str, required
-            Name for column defining some sort of protein identifier (e.g., accession). The default is None.
-
-        Returns
-        -------
-        self.
-
-        '''
-
-### assign attributes for future use
-        self.names = names
+### q-value versus p-value
+    def plot_pvq(self, results=None, pval='p-value', qval='q-value'):
  
-### make sure conditionsa are lists
-        self.first_cols = list(first)
-        self.second_cols = list(second)
+### raise issue if q-values haven't been generated yet
+        if not results:
+            if not hasattr(self, 'results'):
+                raise Exception('\nData containing p-values required. Either provide using `results` parameter or run a statistical test first.\n\nExiting...')
+            else:
+                df_plot = self.results
+        else:
+            df_plot = results
+
+### generate plot
+        df_diag = pd.DataFrame.from_dict({'x':np.arange(0,1.01,0.01), 'y':np.arange(0,1.01,0.01)})
+    
+        fig, ax = plt.subplots(1, 1, figsize=(10,6))
+        sns.lineplot(x=pval, y=qval, data=df_plot, label='q v. p', ax=ax)
+        sns.lineplot(x='x', y='y', data=df_diag, ls=':', label='y = x', ax=ax)
+    
+        ax.set_xlim([0,1])
+        ax.set_ylim([0,1])
+        ax.legend(loc='lower right')
+        ax.set_title('q-value v. p-value')
+    
+        return(fig)
+#----------------------------------------------------------------------------#
+
+
+### # of significant genes versus q-value
+    def plot_sigvq(self, results=None, pval='p-value', qval='q-value'):
+
+        ### raise issue if q-values haven't been generated yet
+        if not results:
+            if not hasattr(self, 'results'):
+                raise Exception('\nData containing p-values required. Either provide using `results` parameter or run a statistical test first.\n\nExiting...')
+            else:
+                df_q = self.results
+        else:
+            df_q = results
+
+### generate plot
+        l_qthresh = np.arange(0,0.11,0.0001)
+        l_signif = [np.sum(df_q[qval] < qt) for qt in l_qthresh]
+        df_plot = pd.DataFrame.from_dict({qval:l_qthresh, 'count':l_signif})
+  
+        fig, ax = plt.subplots(1, 1, figsize=(10,6))
+        sns.lineplot(x=qval, y='count', data=df_plot, ax=ax)
+    
+        ax.set_xlim(np.min(l_qthresh), np.max(l_qthresh))
+        ax.set_ylim(bottom=0)
+        ax.set_ylabel('# of Significant Features')
+        ax.set_title('Number of Signficant Features v. q-value')
         
-### create new data set from source w deduplicated protein names as index
-        if self.source_data[names].duplicated().sum() > 0:
-            raise Warning('\nDuplicate protein names. Keeping first instance...')
-            self.experi_data = self.source_data[~self.source_data.duplicated()].sort_index().copy()
-        else:            
-            self.experi_data = self.source_data.set_index(names).sort_index().copy()
- 
-### define new data split by treatment
-        self.first_data = self.experi_data[self.first_cols].copy()
-        self.second_data = self.experi_data[self.second_cols].copy()
-
-### clean data & deal w missing entries
-#         self.clean(nfloor=10, pseudocount=1)
-
-### normalize data
-#         self.norm_nSAF(plen='# AAs')
-
-### test for statistical significance... T-TEST RIGHT NOW... ALSO DEFINITELY WANT TO BE ABLE TO USE THIS OUTSIDE OF EXPERIMENT FUNCTION
-#         self.ttest(alpha=0.05, correction='BH', labels='GenSymbol')
-        
-### generate data for overrepresentation analysis
+        return(fig)
+#----------------------------------------------------------------------------#
 
 
-### generate data for enrichment analysis
-        
-        return(self) # return self to enable compound method calls
+### run statistical test for determining differential expression (LIMMA)... GONNA BE TOUGH
+
 #----------------------------------------------------------------------------#
 
 

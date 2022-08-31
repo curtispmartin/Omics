@@ -21,6 +21,8 @@ import pandas as pd
 import numpy as np
 
 import scipy.stats as stats
+# import scipy.interpolate as scint # for fitting natural cubic spline in calculating q-values
+import sklearn.isotonic as skliso # utilize the isotonic regression function in place of natural cubic spline which isn't available
 import statsmodels.stats.multitest as smsm # this could be a challenge... worth it? 
 
 import matplotlib.pyplot as plt
@@ -33,7 +35,8 @@ import omics # work in progress!
 path_data = 'Data/KB-Appendix17-P798-16-IPs-Summary-Comparison.xlsx'
 df = pd.read_excel(io=path_data, sheet_name='Summary_Comparison')
 
-path_params = 'Data/Params/20220815_22Rv1_UN_IACS.json'
+path_params = 'Data/Params/20220815_22Rv1_UN_IACS.json' # the more interesting data 
+# path_params = 'Data/Params/20220815_PC3_UN_006.json'
 dict_params = json.load(open(path_params))
 
 ### get IO variables
@@ -71,6 +74,29 @@ test = test.ttest(alpha=alpha, correction='BH', labels='GenSymbol')
 fcthresh = float(dict_params['Parameters']['fcthresh']) # threshold for relevant fold-change
 fig = test.volcano(fcthresh=fcthresh, labels='GenSymbol')
 # fig.savefig(f'{name_outp}.png', bbox_inches='tight', dpi=300)
+
+### generate q-values & some diagnostic plots
+test = test.gen_qval(pval='p-value')
+# test.plot_pvq()
+# test.plot_sigvq()
+
+
+sys.exit()
+
+
+### get required data
+df_test = test.results
+
+### rank data for over-representation analysis (ORA) &/or set enrichment analysis (SEA) 
+
+
+
+
+
+
+
+
+
 
 
 
