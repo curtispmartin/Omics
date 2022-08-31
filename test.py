@@ -80,17 +80,15 @@ test = test.gen_qval(pval='p-value')
 # test.plot_pvq()
 # test.plot_sigvq()
 
+### prepare data for ORA
+df_ora, df_ref = test.prep_ora()
+
 
 sys.exit()
 
 
-### get required data
-df_test = test.results
-
-### rank data for over-representation analysis (ORA) &/or set enrichment analysis (SEA) 
-
-
-
+### prepare data for set enrichment analysis (SEA) 
+test.results.sort_values(by='fold-change')['fold-change']
 
 
 

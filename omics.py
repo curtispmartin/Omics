@@ -387,7 +387,7 @@ class dpea:
 ### # of significant genes versus q-value
     def plot_sigvq(self, results=None, pval='p-value', qval='q-value'):
 
-        ### raise issue if q-values haven't been generated yet
+### raise issue if q-values haven't been generated yet
         if not results:
             if not hasattr(self, 'results'):
                 raise Exception('\nData containing p-values required. Either provide using `results` parameter or run a statistical test first.\n\nExiting...')
@@ -513,6 +513,31 @@ class dpea:
         plt.show()
         
         return(fig) # return figure so user can save as s/he wants
+#----------------------------------------------------------------------------#
+
+
+### define function for generating data formatted for over-representation analysis (ORA)
+#     def prep_ora(self, effect='fold-change', metric='q-value', thresh=0.05):
+    def prep_ora(self, effect='fold-change', thresh=2.0):
+
+### check for user-provided data
+
+
+### get set of features detected in experiment
+        df_ref = pd.DataFrame(self.experi_data[self.first_cols + self.second_cols].dropna(how='all').index.tolist(), columns=['Reference'])
+    
+### new frames for ora
+        df_ora = self.results.sort_values(by=effect, ascending=False).copy()
+
+### create boolean variable for significance
+#         df_ora.loc[df_ora[df_ora[metric] < thresh].index, 'significance'] = 1
+        df_ora = pd.DataFrame(df_ora[(df_ora[effect] >= thresh) | (df_ora[effect] <= 1/thresh)].index.tolist(), columns=['Differential'])
+#         df_ora['significance'] = df_ora['significance'].fillna(0.0)
+
+### rank data according to both effect & whether significance threshold is met
+#         df_ora = pd.DataFrame(df_ora.sort_values(by=['significance', effect], ascending=False).index.tolist())
+        
+        return(df_ora, df_ref)
 #----------------------------------------------------------------------------#
 
 
