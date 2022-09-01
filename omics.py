@@ -319,7 +319,7 @@ class dpea:
         pi0 = pd.Series(regress_pi.predict(h_grid)).value_counts().idxmax() # in essence, calulate the mode of the regression prediction
 
 
-### quick diagnostic plot for estimation of pi0 required in calculating q-values
+### quick diagnostic plot for estimation of pi0 required in calculating q-values... BREAK THIS OUT INTO SEPARATE METHOD?
         df_plot = pd.DataFrame.from_dict({'lambda':h_grid, 'pi0':l_pi, 'pi0-model':regress_pi.predict(h_grid)})
     
         fig, ax = plt.subplots(1, 1, figsize=(10,6))
@@ -371,7 +371,7 @@ class dpea:
 ### generate plot
         df_diag = pd.DataFrame.from_dict({'x':np.arange(0,1.01,0.01), 'y':np.arange(0,1.01,0.01)})
     
-        fig, ax = plt.subplots(1, 1, figsize=(10,6))
+        fig, ax = plt.subplots(1, 1, figsize=(8,6))
         sns.lineplot(x=pval, y=qval, data=df_plot, label='q v. p', ax=ax)
         sns.lineplot(x='x', y='y', data=df_diag, ls=':', label='y = x', ax=ax)
     
@@ -401,7 +401,7 @@ class dpea:
         l_signif = [np.sum(df_q[qval] < qt) for qt in l_qthresh]
         df_plot = pd.DataFrame.from_dict({qval:l_qthresh, 'count':l_signif})
   
-        fig, ax = plt.subplots(1, 1, figsize=(10,6))
+        fig, ax = plt.subplots(1, 1, figsize=(8,6))
         sns.lineplot(x=qval, y='count', data=df_plot, ax=ax)
     
         ax.set_xlim(np.min(l_qthresh), np.max(l_qthresh))
@@ -517,27 +517,34 @@ class dpea:
 
 
 ### define function for generating data formatted for over-representation analysis (ORA)
-#     def prep_ora(self, effect='fold-change', metric='q-value', thresh=0.05):
-    def prep_ora(self, effect='fold-change', thresh=2.0):
+    def prep_ora(self, data=None, results=None, effect='fold-change', thresh=2.0):
 
-### check for user-provided data
-
-
-### get set of features detected in experiment
-        df_ref = pd.DataFrame(self.experi_data[self.first_cols + self.second_cols].dropna(how='all').index.tolist(), columns=['Reference'])
+### get reference data
+        if data:
+            df_ref = data.copy()
+        else:
+            df_ref = pd.DataFrame(self.experi_data[self.first_cols + self.second_cols].dropna(how='all').index.tolist(), columns=['Feature'])
     
-### new frames for ora
-        df_ora = self.results.sort_values(by=effect, ascending=False).copy()
+### get results 
+        if results:
+            df_ora = results.sort_values(by=effect, ascending=False).copy()
+        else:
+            df_ora = self.results.sort_values(by=effect, ascending=False).copy()
 
-### create boolean variable for significance
-#         df_ora.loc[df_ora[df_ora[metric] < thresh].index, 'significance'] = 1
-        df_ora = pd.DataFrame(df_ora[(df_ora[effect] >= thresh) | (df_ora[effect] <= 1/thresh)].index.tolist(), columns=['Differential'])
-#         df_ora['significance'] = df_ora['significance'].fillna(0.0)
-
-### rank data according to both effect & whether significance threshold is met
-#         df_ora = pd.DataFrame(df_ora.sort_values(by=['significance', effect], ascending=False).index.tolist())
+### get over/under-represented features given threshold
+        df_ora = pd.DataFrame(df_ora[(df_ora[effect] >= thresh) | (df_ora[effect] <= 1/thresh)].index.tolist(), columns=['Feature'])
         
         return(df_ora, df_ref)
+#----------------------------------------------------------------------------#
+
+
+### define function for generating data formatted for set enrichment analysis (SEA)
+    def prep_sea(self, effect='fold-change'):
+
+### rank data by effect, lowest to highest
+        df_sea = self.results.sort_values(by=effect)[[effect]].reset_index()
+    
+        return(df_sea)
 #----------------------------------------------------------------------------#
 
 
