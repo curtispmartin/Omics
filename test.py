@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
+'''
 Created on Mon Aug 29 22:43:22 2022
 
 @author: martincup
 
 Parameters
 --------------
-alpha: p-value considered "statistically significant". Currently only used for plotting
-fcthresh: fold-change considered "signficant". log2() transformation applied later
+alpha: p-value considered 'statistically significant'. Currently only used for plotting
+fcthresh: fold-change considered 'signficant'. log2() transformation applied later
 
-"""
+'''
 
 ### import modules
 import os
@@ -63,6 +63,7 @@ second = dict_params['Treatments']['2']
 names = 'Accession'
 exp = exp.experiment(first=first, second=second, names=names)
 
+
 ### clean data
 exp = exp.clean(nfloor=10, pseudocount=1)
 
@@ -106,6 +107,47 @@ df_outp.loc[df_outp[df_outp['q-value'] < alpha].index, 'significance'] = 1
 df_outp['significance'] = df_outp['significance'].fillna(0)
 df_outp = df_outp.sort_values(by=['significance', 'fold-change'], ascending=False)
 df_outp.to_csv(os.path.join(path_outp, f'{name_outp}-processed.csv'))
+
+
+# sys.exit()
+
+
+### format data for dot plot
+df_plot = df_outp[['GenSymbol', 'fold-change', 'q-value']].sort_values('fold-change', ascending=False)
+df_plot['size'] = 1 / df_plot['q-value']
+df_plot.loc[df_plot[df_plot['q-value'] < alpha].index, 'color'] = 'C1'
+df_plot['color'] = df_plot['color'].fillna('C0')
+df_plot.loc[df_plot[df_plot['fold-change'] >= fcthresh].index, 'direction'] = '+'
+df_plot.loc[df_plot[df_plot['fold-change'] <= fcthresh].index, 'direction'] = '-'
+df_plot.loc[df_plot[df_plot['direction'] == '-'].index, 'fold-change'] = 1 / df_plot['fold-change'] # essentially want to plot absolute value for easier interpretation
+
+nplot = 50
+df_plot = pd.concat([df_plot[df_plot['direction'] == '+'].head(n=nplot), df_plot[df_plot['direction'] == '-'].tail(n=nplot)])
+
+### create dot plot using relplot function
+g = sns.relplot(x='fold-change', y='GenSymbol', hue='color', palette={'C0':'C0', 'C1':'C1'}, size='size', col='direction', data=df_plot, edgecolor='k', height=10, aspect=.5, legend=False, facet_kws={'sharey': False, 'sharex': True})
+
+### use same x axis limits on all columns and add better labels
+g.set(xlim=[0,np.round(np.max(df_plot['fold-change']) + 1)], xlabel='Fold-Change', ylabel='')
+
+### use more meaningful titles for the columns
+titles = ['Upregulated', 'Downregulated']
+
+for ax, title in zip(g.axes.flat, titles):
+
+### set a different title for each axis
+    ax.set(title=title)
+
+### make the grid horizontal instead of vertical
+#     ax.xaxis.grid(False)
+#     ax.yaxis.grid(True, lw=1, color='lightgrey')
+
+sns.despine(left=True, bottom=True)
+
+g.savefig(os.path.join(path_outp, f'{name_outp}-dot.png'), bbox_inches='tight', dpi=300)
+
+
+
 
 
 

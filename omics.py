@@ -61,11 +61,6 @@ class dpea:
         self.source_data = df.copy()
 
 
-### plot distributions for data
-
-#----------------------------------------------------------------------------#
-
-
 ### set everything up for interpreting & analyzing experimental data
     def experiment(self, first=None, second=None, names=None): 
         '''
@@ -213,6 +208,15 @@ class dpea:
         self.first_data = df1[df1.columns[df1.columns != plen]].join(df1_norm)
         self.second_data = df2[df2.columns[df2.columns != plen]].join(df2_norm)
         
+### do some quick plotting for diagnostic purposes
+#         df_plot = self.experi_data[self.first_cols + self.second_cols].melt(var_name='Sample', value_name='Count')
+#         g = sns.displot(x='Count', hue='Sample', data=df_plot, kind='kde', lw=2)
+    
+#         g.fig.set_size_inches(12,6)
+#         sns.move_legend(obj=g, loc='upper right', bbox_to_anchor=(0.70, 1.0))
+        
+#         plt.show()
+        
         return(self)
 #----------------------------------------------------------------------------#
  
@@ -256,7 +260,7 @@ class dpea:
 ### get nSAF columns for statistical tests & plotting later
         self.l_nsafcols1 = [col for col in self.first_data.columns if 'nSAF' in col]
         self.l_nsafcols2 = [col for col in self.second_data.columns if 'nSAF' in col]
-
+        
 ### perform two-sample t-test using statsmodels
         ttest = stats.ttest_ind(a=self.first_data[self.l_nsafcols1], b=self.second_data[self.l_nsafcols2], alternative='two-sided', axis=1)
         l_pvals = ttest[1]
@@ -372,7 +376,7 @@ class dpea:
         df_diag = pd.DataFrame.from_dict({'x':np.arange(0,1.01,0.01), 'y':np.arange(0,1.01,0.01)})
     
         fig, ax = plt.subplots(1, 1, figsize=(8,6))
-        sns.lineplot(x=pval, y=qval, data=df_plot, label='q v. p', ax=ax)
+        sns.lineplot(x=pval, y=qval, data=df_plot, label='q v. p', lw=4, ax=ax)
         sns.lineplot(x='x', y='y', data=df_diag, ls=':', label='y = x', ax=ax)
     
         ax.set_xlim([0,1])
@@ -402,7 +406,7 @@ class dpea:
         df_plot = pd.DataFrame.from_dict({qval:l_qthresh, 'count':l_signif})
   
         fig, ax = plt.subplots(1, 1, figsize=(8,6))
-        sns.lineplot(x=qval, y='count', data=df_plot, ax=ax)
+        sns.lineplot(x=qval, y='count', data=df_plot, lw=4, ax=ax)
     
         ax.set_xlim(np.min(l_qthresh), np.max(l_qthresh))
         ax.set_ylim(bottom=0)
