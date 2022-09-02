@@ -14,11 +14,10 @@
 **/*.xls
 **/*.xlsx
 **/*.zip
+
 __pycache__/*
 **/Archive/*
 **/Data/*
 **/Output/*
-**/Params/*
-
 
 **/*.DS_Store

@@ -1,0 +1,16 @@
+{
+	"Metadata":
+		{"Name":"20220815_22Rv1_UN_IACS",
+		"Data":"Data/KB-Appendix17-P798-16-IPs-Summary-Comparison.xlsx",
+		"Sheet":"Summary_Comparison",
+		"Lengths":"# AAs"},
+
+	"Treatments":{
+		"1":["22-un-k-2(# PSM)", "22-un-k-3(# PSM)"],
+		"2":["22-IACS-1(# PSM)", "22-IACS-2(# PSM)", "22-IACS-3(# PSM)"]},
+
+	"Parameters":
+		{"alpha":0.05, 
+		"fcthresh":2.0,
+		"label":1}
+}

@@ -5,11 +5,6 @@ Created on Mon Aug 29 22:43:22 2022
 
 @author: martincup
 
-Parameters
---------------
-alpha: p-value considered 'statistically significant'. Currently only used for plotting
-fcthresh: fold-change considered 'signficant'. log2() transformation applied later
-
 '''
 
 ### import modules
@@ -31,14 +26,16 @@ import seaborn as sns
 sys.path.append('/Users/martincup/Research/Omics') # add Omics directory to python path
 import omics # work in progress!
 
+import requests # for accessing uniprot api
+
 
 ### pull data for testing
 path_data = 'Data/KB-Appendix17-P798-16-IPs-Summary-Comparison.xlsx'
 df = pd.read_excel(io=path_data, sheet_name='Summary_Comparison')
 
 ### define experimental parameters
-path_params = 'Params/20220815_22Rv1_UN_IACS.json' # the more interesting data 
-# path_params = 'Params/20220815_PC3_UN_006.json'
+# path_params = 'Params/20220815_22Rv1_UN_IACS.json' # the more interesting data 
+path_params = 'Params/20220815_PC3_UN_006.json'
 dict_params = json.load(open(path_params))
 
 ### get IO variables
@@ -47,7 +44,7 @@ name_sheet = dict_params['Metadata']['Sheet']
 path_data = os.path.split(dict_params['Metadata']['Data'])[0]
 path_inpu = os.path.join(os.path.split(os.path.abspath(sys.argv[0]))[0], dict_params['Metadata']['Data'])
 name_outp = dict_params['Metadata']['Name']
-path_outp = os.path.join(os.getcwd(), 'Output', name_inpu)
+path_outp = os.path.join(os.getcwd(), 'Output', name_inpu, name_outp)
 
 ### create output directory if none exists
 if not os.path.exists(path_outp):
@@ -81,35 +78,35 @@ exp = exp.ttest(alpha=alpha, correction='BH', labels='GenSymbol')
 ### generate volcano plot
 fcthresh = float(dict_params['Parameters']['fcthresh']) # threshold for relevant fold-change
 fig = exp.volcano(fcthresh=fcthresh, labels='GenSymbol')
-fig.savefig(os.path.join(path_outp, f'{name_outp}-volcano.png'), bbox_inches='tight', dpi=300)
+fig.savefig(os.path.join(path_outp, f'volcano-{name_outp}.png'), bbox_inches='tight', dpi=300)
 
 ### generate q-values & some diagnostic plots
 exp = exp.gen_qval(pval='p-value')
 
 fig = exp.plot_pvq()
-fig.savefig(os.path.join(path_outp, f'{name_outp}-pvq.png'), bbox_inches='tight', dpi=300)
+fig.savefig(os.path.join(path_outp, f'pvq-{name_outp}.png'), bbox_inches='tight', dpi=300)
 
 fig = exp.plot_sigvq()
-fig.savefig(os.path.join(path_outp, f'{name_outp}-sigvq.png'), bbox_inches='tight', dpi=300)
+fig.savefig(os.path.join(path_outp, f'sigvq-{name_outp}.png'), bbox_inches='tight', dpi=300)
 
 ### prepare data for ORA
 df_ora, df_ref = exp.prep_ora()
-df_ora.to_csv(os.path.join(path_outp, f'{name_outp}-ora.txt'), index=False, header=False)
-df_ref.to_csv(os.path.join(path_outp, f'{name_outp}-ref.txt'), index=False, header=False)
+df_ora.to_csv(os.path.join(path_outp, f'ora-{name_outp}.txt'), index=False, header=False)
+df_ref.to_csv(os.path.join(path_outp, f'ref-{name_outp}.txt'), index=False, header=False)
 
 ### prepare data for SEA
 df_sea = exp.prep_sea()
-df_sea.to_csv(os.path.join(path_outp, f'{name_outp}-sea.txt'), sep='\t', index=False, header=False)
+df_sea.to_csv(os.path.join(path_outp, f'sea-{name_outp}.txt'), sep='\t', index=False, header=False)
 
 ### save data for fidelity
 df_outp = exp.results.copy()
 df_outp.loc[df_outp[df_outp['q-value'] < alpha].index, 'significance'] = 1
 df_outp['significance'] = df_outp['significance'].fillna(0)
 df_outp = df_outp.sort_values(by=['significance', 'fold-change'], ascending=False)
-df_outp.to_csv(os.path.join(path_outp, f'{name_outp}-processed.csv'))
+df_outp.to_csv(os.path.join(path_outp, f'processed-{name_outp}.csv'))
 
 
-# sys.exit()
+sys.exit()
 
 
 ### format data for dot plot
@@ -144,7 +141,7 @@ for ax, title in zip(g.axes.flat, titles):
 
 sns.despine(left=True, bottom=True)
 
-g.savefig(os.path.join(path_outp, f'{name_outp}-dot.png'), bbox_inches='tight', dpi=300)
+g.savefig(os.path.join(path_outp, f'dot-{name_outp}.png'), bbox_inches='tight', dpi=300)
 
 
 
