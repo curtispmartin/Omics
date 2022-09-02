@@ -34,8 +34,8 @@ path_data = 'Data/KB-Appendix17-P798-16-IPs-Summary-Comparison.xlsx'
 df = pd.read_excel(io=path_data, sheet_name='Summary_Comparison')
 
 ### define experimental parameters
-# path_params = 'Params/20220815_22Rv1_UN_IACS.json' # the more interesting data 
-path_params = 'Params/20220815_PC3_UN_006.json'
+path_params = 'Params/20220815_22Rv1_UN_IACS.json' # the more interesting data 
+# path_params = 'Params/20220815_PC3_UN_006.json'
 dict_params = json.load(open(path_params))
 
 ### get IO variables

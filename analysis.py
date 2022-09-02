@@ -30,8 +30,8 @@ import requests # for accessing uniprot api
 
 
 ### define experimental parameters
-# path_params = 'Params/20220815_22Rv1_UN_IACS.json' # the more interesting data 
-path_params = 'Params/20220815_PC3_UN_006.json'
+path_params = 'Params/20220815_22Rv1_UN_IACS.json' # the more interesting data 
+# path_params = 'Params/20220815_PC3_UN_006.json'
 dict_params = json.load(open(path_params))
 
 ### get IO variables
@@ -120,7 +120,7 @@ def get_protname(accession='P60709', organism_id=9606):
 # organism_id = 9606 # human
 # print(get_protname(accession=accession, organism_id=organism_id))
 
-### get protein names...
+### get protein names for proteins in enriched sets
 df_prot['Protein Name'] = df_prot['Accession'].apply(lambda accession: get_protname(accession=accession, organism_id=9606))
 
 ### reorganize for simple viewing
