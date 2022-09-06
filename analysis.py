@@ -148,7 +148,7 @@ df_plot['Description'] = df_plot['Description'].str.split().str[:2].str.join(sep
 
 ### a hybrid b/w a heat map & a dot plot
 sns.set_theme(style='whitegrid')
-g = sns.relplot(data=df_plot, x='GenSymbol', y='Description', hue='q-value', size='fold-change', palette='Reds_r', hue_norm=(0, 1), edgecolor='k', height=10, sizes=(50, 250), size_norm=(0, 10))
+g = sns.relplot(data=df_plot, x='GenSymbol', y='Description', hue='q-value', size='fold-change', palette='Reds_r', hue_norm=(0, 1), edgecolor='k', height=10, sizes=(50, 250), size_norm=(1, 10))
 
 ### improve plot formatting
 g.set(xlabel='', ylabel='', title='Proteins in Enriched Pathways', aspect='equal')
