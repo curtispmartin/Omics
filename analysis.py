@@ -124,21 +124,63 @@ def get_protname(accession='P60709', organism_id=9606):
 df_prot['Protein Name'] = df_prot['Accession'].apply(lambda accession: get_protname(accession=accession, organism_id=9606))
 
 ### reorganize for simple viewing
-df_prot = df_prot[['Pathway', 'Description', 'Accession', 'GenSymbol', 'fold-change', 'p-value', 'q-value', 'Protein Name']].copy()
+df_prot = df_prot[['Pathway', 'Description', 'Accession', 'GenSymbol', 'fold-change', 'p-value', 'q-value', 'Protein Name']].reset_index(drop=True).copy()
 
 ### save to file
 df_prot.to_csv(os.path.join(path_outp, f'protlist-{name_outp}.csv'), index=False)
 
 
+# sys.exit()
 
 
+### format data for dot plot
+# fcthresh = 2.0
+df_plot = df_prot.sort_values('fold-change', ascending=False)
+df_plot['size'] = 1 / df_plot['q-value']
+df_plot.loc[df_plot[df_plot['fold-change'] >= 1.0].index, 'direction'] = '+'
+df_plot.loc[df_plot[df_plot['fold-change'] <= 1.0].index, 'direction'] = '-'
+df_plot.loc[df_plot[df_plot['direction'] == '-'].index, 'fold-change'] = 1 / df_plot['fold-change'] # essentially want to plot absolute value for easier interpretation
+nplot = 50
+df_plot = pd.concat([df_plot[df_plot['direction'] == '+'].head(n=nplot), df_plot[df_plot['direction'] == '-'].tail(n=nplot)])
+df_plot = df_plot.sort_values(by='GenSymbol')
+df_plot['Description'] = df_plot['Description'].str.split().str[:2].str.join(sep=' ')
+# df_plot = df_plot.sort_values(by='fold-change', ascending=False)
+
+### a hybrid b/w a heat map & a dot plot
+sns.set_theme(style='whitegrid')
+g = sns.relplot(data=df_plot, x='GenSymbol', y='Description', hue='q-value', size='fold-change', palette='Reds_r', hue_norm=(0, 1), edgecolor='k', height=10, sizes=(50, 250), size_norm=(0, 10))
+
+### improve plot formatting
+g.set(xlabel='', ylabel='', title='Proteins in Enriched Pathways', aspect='equal')
+g.despine(left=True, bottom=True)
+g.ax.margins(.05)
+for label in g.ax.get_xticklabels():
+    label.set_rotation(90)
+for artist in g.legend.legendHandles:
+    artist.set_edgecolor('k')
+
+g.savefig(os.path.join(path_outp, f'heatmap-{name_outp}.png'), dpi=300)
 
 
+sys.exit()
 
 
+dict_count = df_plot['GenSymbol'].value_counts().to_dict()
+for idx, row in df_plot.iterrows():
+    df_plot.loc[idx, 'Count'] = dict_count[row['GenSymbol']]
+
+g = sns.relplot(x='q-value', y='fold-change', hue='Pathway', size='Count', data=df_plot)
+g.savefig(os.path.join(path_outp, f'test-{name_outp}.png'), dpi=300)
 
 
+sys.exit()
 
+
+### create a radial dot plot? 
+sns.set_theme()
+g = sns.FacetGrid(df_plot, hue='Pathway', subplot_kws=dict(projection='polar'), height=4.5, sharex=False, sharey=False, despine=False)
+g.map(sns.scatterplot, 'q-value', 'fold-change')
+# g.savefig(os.path.join(path_outp, f'test-{name_outp}.png'), dpi=300)
 
 
 
