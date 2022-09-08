@@ -14,8 +14,8 @@ The following methods are included:
 - `.plot_pvq()` ...
 - `.plot_sigvq()` ...
 - `.volcano()` ...
-- `.prep_ora()` ...
-- `.prep_sea()` ...
+- `.prep_ora()` prepares your data for representation analyis using [PANTHER](http://pantherdb.org/). Yields two data frames: one containing the proteins which meet a user-defined threshold for differential expression & another which contains all the proteins detected in your samples. 
+- `.prep_sea()` prepares your data for enrichment analyis using [PANTHER](http://pantherdb.org/). Yields a single data frame ranked by differential expression. 
 
 The `dpea` class requires your proteomics dataset along w some parameters in calling. 
 The primary method is called `experiment`, which will transform your data & perform statistical tests according to defaults. 
@@ -26,6 +26,7 @@ Highly suggest using `params.json` file for input parameters (see `example.json`
 The start of a module for analyzing enrichment data generated from `omics.py` via PANTHER. 
 Very much a work in progress.
 Will integrate into module as code develops. 
+-----
 
 ## Exp
 Contains json files w script parameters for each experiment. 
@@ -34,4 +35,4 @@ Contains json files w script parameters for each experiment.
 Contains conda environment yml file.  
 
 ## Params
-Contains two sample parameter files. Not mandatory for implementing methodologyl; more of a recommendation w.r.t. simplifying the analysis while making it more reproducible. 
+Contains two sample parameter files. Not required, but highly recommended! Simplifies the analysis & improves reproducibility. 
