@@ -26,7 +26,6 @@ Highly suggest using `params.json` file for input parameters (see `example.json`
 The start of a module for analyzing enrichment data generated from `omics.py` via PANTHER. 
 Very much a work in progress.
 Will integrate into module as code develops. 
------
 
 ## Exp
 Contains json files w script parameters for each experiment. 
