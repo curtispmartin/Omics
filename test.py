@@ -68,8 +68,13 @@ plen = dict_params['Metadata']['Lengths']
 exp = exp.norm_nSAF(plen=plen)
 
 ### run statistical test
+# log = True
 alpha = float(dict_params['Parameters']['alpha']) # confidence level
 exp = exp.ttest(alpha=alpha, correction='BH', labels='GenSymbol')
+
+### plot test data distributions
+fig = exp.plot_distr()
+fig.savefig(os.path.join(path_outp, f'distr-{name_outp}.png'), bbox_inches='tight', dpi=300)
 
 ### try running all steps in compound method
 # exp = omics.dpea(df=df).experiment(first=first, second=second, names=names).clean(nfloor=10, pseudocount=1).norm_nSAF(plen='# AAs').ttest(alpha=0.05, correction='BH', labels='GenSymbol')
@@ -80,7 +85,7 @@ fig = exp.volcano(fcthresh=fcthresh, labels='GenSymbol')
 fig.savefig(os.path.join(path_outp, f'volcano-{name_outp}.png'), bbox_inches='tight', dpi=300)
 
 ### generate q-values & some diagnostic plots
-exp = exp.gen_qval(pval='p-value')
+exp = exp.est_qval(pval='p-value')
 
 fig = exp.plot_pvq()
 # fig.savefig(os.path.join(path_outp, f'pvq-{name_outp}.png'), bbox_inches='tight', dpi=300)
@@ -103,30 +108,6 @@ df_outp.loc[df_outp[df_outp['q-value'] < alpha].index, 'significance'] = 1
 df_outp['significance'] = df_outp['significance'].fillna(0)
 df_outp = df_outp.sort_values(by=['significance', 'fold-change'], ascending=False)
 df_outp.to_csv(os.path.join(path_outp, f'processed-{name_outp}.csv'))
-
-
-sys.exit()
-
-
-### plot raw & transformed data
-# df_test = exp.experi_data[exp.first_cols].copy()
-# df_test = df_test.join(exp.experi_data[exp.second_cols], how='outer')
-
-df_test = exp.first_data[exp.l_nsafcols1].copy()
-df_test = df_test.join(exp.second_data[exp.l_nsafcols2], how='outer')
-
-df_test = df_test.melt(var_name='Sample', value_name='Value')
-df_test['Value'] = np.log(df_test['Value'])
-
-
-fig, ax = plt.subplots(1, 1, figsize=(12,8))
-
-# sns.histplot(x='Value', hue='Sample', data=df_test, ax=ax)
-sns.boxplot(x='Value', y='Sample', data=df_test, whis=[0, 100], width=.6, palette="vlag")
-sns.stripplot(x='Value', y='Sample', data=df_test, size=4, color=".3", linewidth=0)
-# sns.kdeplot(x='Value', hue='Sample', data=df_test, ax=ax)
-
-plt.show()
 
 
 sys.exit()
