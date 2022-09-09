@@ -261,8 +261,9 @@ class dpea:
         self.l_nsafcols1 = [col for col in self.first_data.columns if 'nSAF' in col]
         self.l_nsafcols2 = [col for col in self.second_data.columns if 'nSAF' in col]
         
-### perform two-sample t-test using statsmodels
+### perform two-sample t-test using scipy stats... perform test on natural logaritm of NSAF??
         ttest = stats.ttest_ind(a=self.first_data[self.l_nsafcols1], b=self.second_data[self.l_nsafcols2], alternative='two-sided', axis=1)
+#         ttest = stats.ttest_ind(a=np.log(self.first_data[self.l_nsafcols1]), b=np.log(self.second_data[self.l_nsafcols2]), alternative='two-sided', axis=1)
         l_pvals = ttest[1]
 
 ### join data for further analysis

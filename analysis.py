@@ -93,7 +93,25 @@ for idx, row in df_enri.iterrows():
 
 
 ### define function for pulling protein name & information from UniProt API
-def get_protname(accession='P60709', organism_id=9606):
+def get_protname(accession=None, organism_id=9606):
+    '''
+
+    Parameters
+    ----------
+    accession : string, required
+        The UniProt accession number for the protein of interest. The default is 'P60709'.
+    organism_id : numeric, optional
+        The organism ID for searching proteins. The default is 9606, the ID for humans.
+
+    Returns
+    -------
+    Right now, only the protein name. 
+
+    '''
+
+### ensure accession provided before anything else
+    if not accession:
+        raise Exception('\nWarning: No protein accession provided. Exiting...')
     
 ### define url for pulling protein name from API... IS THERE AN EASIER WAY? 
     url = f'https://rest.uniprot.org/uniprotkb/search?query=accession:{accession}&organism_id:{organism_id}&columns=protein_name'    
@@ -110,7 +128,7 @@ def get_protname(accession='P60709', organism_id=9606):
 ### message for user
     print(f'Working on {accession}... {protname}')
     
-### close request... not sure this is strictly necessary
+### close request... not sure this is necessary but can't hurt
     response.close()
     
     return(protname)
@@ -136,7 +154,7 @@ df_prot.to_csv(os.path.join(path_outp, f'protlist-{name_outp}.csv'), index=False
 ### format data for dot plot
 # fcthresh = 2.0
 df_plot = df_prot.sort_values('fold-change', ascending=False)
-df_plot['size'] = 1 / df_plot['q-value']
+# df_plot['size'] = 1 / df_plot['q-value']
 df_plot.loc[df_plot[df_plot['fold-change'] >= 1.0].index, 'direction'] = '+'
 df_plot.loc[df_plot[df_plot['fold-change'] <= 1.0].index, 'direction'] = '-'
 df_plot.loc[df_plot[df_plot['direction'] == '-'].index, 'fold-change'] = 1 / df_plot['fold-change'] # essentially want to plot absolute value for easier interpretation

@@ -60,7 +60,6 @@ second = dict_params['Treatments']['2']
 names = 'Accession'
 exp = exp.experiment(first=first, second=second, names=names)
 
-
 ### clean data
 exp = exp.clean(nfloor=10, pseudocount=1)
 
@@ -84,10 +83,10 @@ fig.savefig(os.path.join(path_outp, f'volcano-{name_outp}.png'), bbox_inches='ti
 exp = exp.gen_qval(pval='p-value')
 
 fig = exp.plot_pvq()
-fig.savefig(os.path.join(path_outp, f'pvq-{name_outp}.png'), bbox_inches='tight', dpi=300)
+# fig.savefig(os.path.join(path_outp, f'pvq-{name_outp}.png'), bbox_inches='tight', dpi=300)
 
 fig = exp.plot_sigvq()
-fig.savefig(os.path.join(path_outp, f'sigvq-{name_outp}.png'), bbox_inches='tight', dpi=300)
+# fig.savefig(os.path.join(path_outp, f'sigvq-{name_outp}.png'), bbox_inches='tight', dpi=300)
 
 ### prepare data for ORA
 df_ora, df_ref = exp.prep_ora()
@@ -104,6 +103,47 @@ df_outp.loc[df_outp[df_outp['q-value'] < alpha].index, 'significance'] = 1
 df_outp['significance'] = df_outp['significance'].fillna(0)
 df_outp = df_outp.sort_values(by=['significance', 'fold-change'], ascending=False)
 df_outp.to_csv(os.path.join(path_outp, f'processed-{name_outp}.csv'))
+
+
+sys.exit()
+
+
+### plot raw & transformed data
+# df_test = exp.experi_data[exp.first_cols].copy()
+# df_test = df_test.join(exp.experi_data[exp.second_cols], how='outer')
+
+df_test = exp.first_data[exp.l_nsafcols1].copy()
+df_test = df_test.join(exp.second_data[exp.l_nsafcols2], how='outer')
+
+df_test = df_test.melt(var_name='Sample', value_name='Value')
+df_test['Value'] = np.log(df_test['Value'])
+
+
+fig, ax = plt.subplots(1, 1, figsize=(12,8))
+
+# sns.histplot(x='Value', hue='Sample', data=df_test, ax=ax)
+sns.boxplot(x='Value', y='Sample', data=df_test, whis=[0, 100], width=.6, palette="vlag")
+sns.stripplot(x='Value', y='Sample', data=df_test, size=4, color=".3", linewidth=0)
+# sns.kdeplot(x='Value', hue='Sample', data=df_test, ax=ax)
+
+plt.show()
+
+
+sys.exit()
+
+
+### implement linear model for microarray data (LIMMA) method for analyzing differential expression
+
+### create dpea object
+test = omics.dpea(df=df)
+
+### define experiment
+first = dict_params['Treatments']['1']
+second = dict_params['Treatments']['2']
+names = 'Accession'
+test = test.experiment(first=first, second=second, names=names)
+
+
 
 
 sys.exit()
