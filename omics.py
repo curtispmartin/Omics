@@ -39,6 +39,7 @@ class dpea:
         1. Mass spectrometry (MS) data w spectral counts. 
     '''
     
+#----------------------------------------------------------------------------#
 ### initialization parameters... SHOULD I INCLUDE THESE PARAMETERS W THE EXPERIMENT FUNCTION INSTEAD?? THINK ABOUT HOW THIS WILL BE USED (NOT AS SINGLE SCRIPT, LIKE DONE BELOW)
     def __init__(self, df=None):
 #     def __init__(self, df=None, params=None):
@@ -59,8 +60,10 @@ class dpea:
         
 ### define some attributes which allow for data tracking
         self.source_data = df.copy()
+#----------------------------------------------------------------------------#
 
 
+#----------------------------------------------------------------------------#
 ### set everything up for interpreting & analyzing experimental data
     def experiment(self, first=None, second=None, names=None): 
         '''
@@ -102,6 +105,7 @@ class dpea:
 #----------------------------------------------------------------------------#
 
 
+#----------------------------------------------------------------------------#
 ### process the data... remove consistently low-value entries & add pseudocounts
     def clean(self, nfloor=10, pseudocount=1, **kwargs):     
         '''
@@ -157,6 +161,7 @@ class dpea:
 #----------------------------------------------------------------------------#
         
 
+#----------------------------------------------------------------------------#
 ### normalize data (normalized spectral abundance factor, or nSAF)
     def norm_nSAF(self, plen='# AAs', **kwargs):
         '''
@@ -221,8 +226,56 @@ class dpea:
 #----------------------------------------------------------------------------#
  
 
+#----------------------------------------------------------------------------#
+#     def plot_distr(self, xlabel=None, first=None, second=None):
+    def plot_distr(self, log=True, testdata1=None, testdata2=None):
+
+### define labels
+        if log:
+            xlabel = '$ln(NSAF)$'
+            title = 'Log-Transformed Data Distributions'
+        else:
+            xlabel = 'NSAF'
+            title = 'Normalized Data Distributions'
+
+### define data for plotting        
+        if not testdata1:
+            if not hasattr(self, 'testdata1'):
+                raise Exception('\nWarning: No statistical test performed. Cannot plot data. Exiting...')
+            else:
+                testdata1 = self.testdata1.copy()
+                testdata1.columns = self.first_cols
+        
+        if not testdata2:
+            if not hasattr(self, 'testdata2'):
+                raise Exception('\nWarning: No statistical test performed. Cannot plot data. Exiting...')
+            else:
+                testdata2 = self.testdata2.copy()
+                testdata2.columns = self.second_cols
+
+        df_plot = testdata1.join(testdata2, how='outer')
+        df_plot = df_plot.melt(var_name='Sample', value_name='Value')
+
+### generate plot
+        fig, ax = plt.subplots(1, 1, figsize=(12,8))
+
+        sns.boxplot(x='Value', y='Sample', data=df_plot, whis=[0, 100], width=.6, palette='vlag', ax=ax)
+        sns.stripplot(x='Value', y='Sample', data=df_plot, size=4, color='.3', linewidth=0, ax=ax)
+
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel('')
+        ax.set_title(title)
+        plt.show()
+        del(df_plot)
+        
+        return(fig)
+
+#----------------------------------------------------------------------------#
+
+
+#----------------------------------------------------------------------------#
 ### run statistical test for determining differential expression (t-test)
-    def ttest(self, alpha=0.05, correction='BH', labels=None, **kwargs):
+    def ttest(self, alpha=0.05, correction='BH', labels=None, log=True, **kwargs):
         '''
 
         Parameters
@@ -230,9 +283,11 @@ class dpea:
         alpha : float, required
             Significance threshold for t-test, not adjusted for multiple comparisons. The default is 0.05.
         correction : string, optional... LIKELY A PROBLEM FOR THE VOLCANO PLOT
-            DESCRIPTION. The default is 'BH'.
-        labels : TYPE, optional
-            DESCRIPTION. The default is None.
+            Define correction for multiple comparison testing. The default is 'BH' (Benjamini-Hochberg, which right now is the only option).
+        labels : string, optional
+            Provides a list of labels to carry along for easier interpretation. The default is None.
+        log : boolean, optional
+            Choose whether to perform test on ln(NSAF) or NSAF. The default is True. 
         **kwargs : pd.DataFrame, optional
             Can provide new data for cleaning using 'first' & 'second' options, like in experiment() method. 
 
@@ -261,10 +316,20 @@ class dpea:
         self.l_nsafcols1 = [col for col in self.first_data.columns if 'nSAF' in col]
         self.l_nsafcols2 = [col for col in self.second_data.columns if 'nSAF' in col]
         
-### perform two-sample t-test using scipy stats... perform test on natural logaritm of NSAF??
-        ttest = stats.ttest_ind(a=self.first_data[self.l_nsafcols1], b=self.second_data[self.l_nsafcols2], alternative='two-sided', axis=1)
-#         ttest = stats.ttest_ind(a=np.log(self.first_data[self.l_nsafcols1]), b=np.log(self.second_data[self.l_nsafcols2]), alternative='two-sided', axis=1)
+### define data for performing t-test... ln(NSAF) unless directed otherwise by user
+        if log:
+            self.testdata1 = np.log(self.first_data[self.l_nsafcols1])
+            self.testdata2 = np.log(self.second_data[self.l_nsafcols2])
+        else:
+            self.testdata1 = self.first_data[self.l_nsafcols1]
+            self.testdata2 = self.second_data[self.l_nsafcols2]
+
+### run t-test
+        ttest = stats.ttest_ind(a=self.testdata1, b=self.testdata2, alternative='two-sided', axis=1)
         l_pvals = ttest[1]
+
+### plot test data distributions
+#         self.plot_distr()
 
 ### join data for further analysis
         self.results = self.first_data.join(self.second_data)
@@ -276,10 +341,6 @@ class dpea:
         self.results['p-value'] = l_pvals
 
 ### implement Benjamini-Hochberg procedure to correct for multiple comparisons... BREAK THIS OUT??
-#         df_sub = df_sub.sort_values('p-value') 
-#         m = df_sub.shape[0] 
-#         df_sub['k'] = np.arange(1, m+1, 1)
-#         df_sub['p-adj'] = df_sub['p-value'] * (m / df_sub['k']) # now this should be compared against alpha
         if correction == 'BH':
             self.results['p-adj'] = smsm.multipletests(self.results['p-value'], alpha=alpha, method='fdr_bh')[1] # now this should be compared against alpha
             print(f'\nBonferroni-adjusted significance level:\t{smsm.multipletests(self.results["p-value"], alpha=alpha, method="fdr_bh")[3]:.5f}\n(just a ballpark check, Benjamini-Hochberg used here)')
@@ -294,8 +355,9 @@ class dpea:
 #----------------------------------------------------------------------------#
 
 
+#----------------------------------------------------------------------------#
 ### function for calculating q-values
-    def gen_qval(self, results=None, pval='p-value'):
+    def est_qval(self, results=None, pval='p-value'):
     
 ### raise issue if p-values haven't been generated yet
         if not results:
@@ -319,9 +381,11 @@ class dpea:
 ### generate cubic spline of pi versus lambdas... NOT NATURAL, DESPITE OPTION; NOT SMOOTHED; POOR EXTRAPOLATION
 #         spline_pi = scint.CubicSpline(x=h_grid, y=l_pi, bc_type='natural')
 
+
 ### train isotonic regression to estimate pi0... CURRENTLY UNTESTED WORKAROUND DUE TO LACK OF NORMAL CUBIC SPLINE IN PYTHON
         regress_pi = skliso.IsotonicRegression(increasing=False).fit(h_grid, l_pi) # WHAT ABOUT A NORMAL POLYNOMIAL REGRESSION VIA SKLEARN?
         pi0 = pd.Series(regress_pi.predict(h_grid)).value_counts().idxmax() # in essence, calulate the mode of the regression prediction
+        print(f'\nExpected proportion of null features:\t{pi0:.2f}\n(used for calculating q-values)')
 
 
 ### quick diagnostic plot for estimation of pi0 required in calculating q-values... BREAK THIS OUT INTO SEPARATE METHOD?
@@ -361,6 +425,7 @@ class dpea:
 #----------------------------------------------------------------------------#
 
 
+#----------------------------------------------------------------------------#
 ### q-value versus p-value
     def plot_pvq(self, results=None, pval='p-value', qval='q-value'):
  
@@ -389,6 +454,7 @@ class dpea:
 #----------------------------------------------------------------------------#
 
 
+#----------------------------------------------------------------------------#
 ### # of significant genes versus q-value
     def plot_sigvq(self, results=None, pval='p-value', qval='q-value'):
 
@@ -423,6 +489,7 @@ class dpea:
 #----------------------------------------------------------------------------#
 
 
+#----------------------------------------------------------------------------#
 ### generate volcano plot
     def volcano(self, fcthresh=2, alpha=None, labels=None):
         
@@ -502,7 +569,7 @@ class dpea:
         sns.scatterplot(x='log2(FC)', y='-log10(p)', hue='Hue', style='Hue', data=df_volc, palette=palette, markers=markers, edgecolor='black', linewidth=0.25, s=18, legend=False, ax=ax)
 
         if labels:
-            print('\nWorking on the labels. Can take a minute...\n')
+            print('\nWorking on volcano plot labels. Can take a minute...')
             for idx in range(df_volc[df_volc['p-Sig'] == 1].shape[0])[:100]:
                 x = 0.075+df_volc.loc[idx, 'log2(FC)']
                 y = df_volc.loc[idx, '-log10(p)']
@@ -510,7 +577,7 @@ class dpea:
                 plt.text(x=x, y=y, s=s, fontdict=dict(color='k', size=4))
         
         ax.set_xlim([xmin, xmax])
-        ax.set_xlabel('$log_{2}$(Fold Change)')
+        ax.set_xlabel('$log_{2}$(Fold Enrichment)')
         ax.set_ylim([ymin, ymax])
         ax.set_ylabel('$-log_{10}$(p-value)')
 #         plt.title(f'Volcano Plot ({name_outp})')
@@ -521,6 +588,7 @@ class dpea:
 #----------------------------------------------------------------------------#
 
 
+#----------------------------------------------------------------------------#
 ### define function for generating data formatted for over-representation analysis (ORA)
     def prep_ora(self, data=None, results=None, effect='fold-change', thresh=2.0):
 
@@ -543,6 +611,7 @@ class dpea:
 #----------------------------------------------------------------------------#
 
 
+#----------------------------------------------------------------------------#
 ### define function for generating data formatted for set enrichment analysis (SEA)
     def prep_sea(self, effect='fold-change'):
 
@@ -551,28 +620,6 @@ class dpea:
     
         return(df_sea)
 #----------------------------------------------------------------------------#
-
-
-### pull data for testing
-# path_data = 'Data/KB-Appendix17-P798-16-IPs-Summary-Comparison.xlsx'
-# df = pd.read_excel(io=path_data, sheet_name='Summary_Comparison')
-
-# path_params = 'Data/Params/20220815_22Rv1_UN_IACS.json'
-# dict_params = json.load(open(path_params))
-
-### instantiate class object using data
-# first = dict_params['Treatments']['1']
-# second = dict_params['Treatments']['2']
-# names = 'Accession'
-# test = dpea(df=df)
-# test.experiment(first=first, second=second, names=names)
-
-# df_first = test.first_data
-# df_second = test.second_data
-# df_results = test.results
-
-# fig = test.volcano()
-# fig.savefig('test.png', bbox_inches='tight', dpi=300)
 
 
 

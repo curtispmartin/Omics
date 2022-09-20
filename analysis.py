@@ -23,7 +23,9 @@ import statsmodels.stats.multitest as smsm # this could be a challenge... worth 
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-sys.path.append('/Users/martincup/Research/Omics') # add Omics directory to python path
+# sys.path.append('/Users/martincup/Research/Omics') # add Omics directory to python path
+path_work = os.getcwd()
+sys.path.append(path_work) # add Omics directory to python path
 import omics # work in progress!
 
 import requests # for accessing uniprot api
@@ -122,7 +124,7 @@ def get_protname(accession=None, organism_id=9606):
         raise Exception(f'\nCaution: Link to UniProt API failed for {accession}. Exiting...')
     
 ### pull data of interest... right now, just uniprotid (for confirmation) & protein name
-    uniprotid = response.json()['results'][0]['uniProtkbId']
+#     uniprotid = response.json()['results'][0]['uniProtkbId']
     protname = response.json()['results'][0]['proteinDescription']['recommendedName']['fullName']['value']
 
 ### message for user
@@ -152,21 +154,20 @@ df_prot.to_csv(os.path.join(path_outp, f'protlist-{name_outp}.csv'), index=False
 
 
 ### format data for dot plot
-# fcthresh = 2.0
 df_plot = df_prot.sort_values('fold-change', ascending=False)
-# df_plot['size'] = 1 / df_plot['q-value']
 df_plot.loc[df_plot[df_plot['fold-change'] >= 1.0].index, 'direction'] = '+'
 df_plot.loc[df_plot[df_plot['fold-change'] <= 1.0].index, 'direction'] = '-'
-df_plot.loc[df_plot[df_plot['direction'] == '-'].index, 'fold-change'] = 1 / df_plot['fold-change'] # essentially want to plot absolute value for easier interpretation
+df_plot.loc[df_plot[df_plot['direction'] == '-'].index, 'fold-change'] = -1 / df_plot['fold-change'] # essentially want to plot absolute value for easier interpretation
 nplot = 50
 df_plot = pd.concat([df_plot[df_plot['direction'] == '+'].head(n=nplot), df_plot[df_plot['direction'] == '-'].tail(n=nplot)])
 df_plot = df_plot.sort_values(by='GenSymbol')
 df_plot['Description'] = df_plot['Description'].str.split().str[:2].str.join(sep=' ')
-# df_plot = df_plot.sort_values(by='fold-change', ascending=False)
+df_plot['-log10q'] = -np.log10(df_plot['q-value'])
 
 ### a hybrid b/w a heat map & a dot plot
 sns.set_theme(style='whitegrid')
-g = sns.relplot(data=df_plot, x='GenSymbol', y='Description', hue='q-value', size='fold-change', palette='Reds_r', hue_norm=(0, 1), edgecolor='k', height=10, sizes=(50, 250), size_norm=(1, 10))
+# g = sns.relplot(data=df_plot, x='GenSymbol', y='Description', hue='q-value', size='fold-change', palette='Reds_r', hue_norm=(0, 1), edgecolor='k', height=10, sizes=(50, 250), size_norm=(1, 10))
+g = sns.relplot(data=df_plot, x='GenSymbol', y='Description', hue='fold-change', size='-log10q', palette='vlag', hue_norm=(-5, 5), edgecolor='k', height=10, sizes=(50, 250), size_norm=(0, 2))
 
 ### improve plot formatting
 g.set(xlabel='', ylabel='', title='Proteins in Enriched Pathways', aspect='equal')
@@ -177,7 +178,7 @@ for label in g.ax.get_xticklabels():
 for artist in g.legend.legendHandles:
     artist.set_edgecolor('k')
 
-g.savefig(os.path.join(path_outp, f'heatmap-{name_outp}.png'), dpi=300)
+g.savefig(os.path.join(path_outp, f'dot-{name_outp}.png'), dpi=300)
 
 
 sys.exit()
