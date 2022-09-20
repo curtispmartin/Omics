@@ -23,7 +23,9 @@ import statsmodels.stats.multitest as smsm # this could be a challenge... worth 
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-sys.path.append('/Users/martincup/Research/Omics') # add Omics directory to python path
+# sys.path.append('/Users/martincup/Research/Omics') # add Omics directory to python path
+path_work = os.getcwd()
+sys.path.append(path_work) # add Omics directory to python path
 import omics # work in progress!
 
 import requests # for accessing uniprot api
