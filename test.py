@@ -28,7 +28,7 @@ path_work = os.getcwd()
 sys.path.append(path_work) # add Omics directory to python path
 import omics # work in progress!
 
-import requests # for accessing uniprot api
+import requests # for accessing APIs
 
 
 ### pull data for testing
@@ -121,55 +121,13 @@ organism = 9606 # human
 correction = 'FDR' # p-value correction via false discovery rate
 annotDataSet = 'ANNOT_TYPE_ID_PANTHER_PATHWAY' # pathway set to search (e.g., Panther or GO Biological Process)... CODE THESE BETTER
 path_geneExp = os.path.join(path_outp, f'sea-{name_outp}.txt')
-
-
-def run_SEA(path_geneExp=None, annotDataSet='ANNOT_TYPE_ID_PANTHER_PATHWAY', organism=9606, correction='FDR', cutoff=None):
-
-### the data you want to pull
-    files = {'organism':organism, 'correction':correction, 'annotDataSet':annotDataSet, 'geneExp':open(path_geneExp, 'r')}
-
-### url for PANTHER SEA API
-    url = 'http://pantherdb.org/services/oai/pantherdb/enrich/statenrich'
-
-### check connection to API... it can be finnicky sometimes
-    try:
-        requests.head(url, timeout=5) 
-    except:
-        raise Exception('Cannot reach API. Exiting...')
-
-### access API... requires POST call since you have to run enrichment analysis, not just pull data
-    with requests.post(url, files=files, timeout=5) as response: 
-
-### extract enrichment results
-        df_enri = pd.DataFrame.from_dict(response.json()['results']['result'])
-        for idx, row in df_enri.iterrows():
-            try:
-                df_enri.loc[idx, 'id'] = row['term']['id']
-                df_enri.loc[idx, 'label'] = row['term']['label']
-            except:
-                print(f'\nNo pathway data for index {idx}. Moving on...')
-        
-### format the data
-        l_seacols = ['id', 'label', 'number_in_list', 'fdr', 'pValue', 'plus_minus']
-        dict_seacols = {'id':'Pathway', 'label':'Description', 'number_in_list':'Count', 'fdr':'FDR', 'pValue':'p-value', 'plus_minus':'+/-'}
-        df_enri = df_enri[l_seacols].rename(columns=dict_seacols).sort_values(by='FDR').copy()
-                    
-### get list of pathway IDs for mapping to proteins
-#         cutoff = 0.05
-        if cutoff:
-            df_enri = df_enri[df_enri['FDR'] < cutoff].copy()
-            
-        print(f'\n{df_enri}\n')
-        
-        return(df_enri)
     
 ### run enrichment analysis & save to file
-df_enri = run_SEA(path_geneExp=path_geneExp, cutoff=0.05)
+enri = omics.enrichment(path_geneExp=path_geneExp)
+df_enri = enri.run_SEA(cutoff=0.05)
 df_enri.to_csv(os.path.join(path_outp, f'enriched-{name_outp}.csv'), index=False)
 #----------------------------------------------------------------------------#
 
-
-# sys.exit()
 
 ##### MATCH PROTEINS IN ENRICHED SET TO PATHWAYS FOUND IN ANALYSIS
 #----------------------------------------------------------------------------#

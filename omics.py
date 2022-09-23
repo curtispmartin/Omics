@@ -27,6 +27,8 @@ import sklearn.isotonic as skliso # utilize the isotonic regression function in 
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+import requests # for accessing APIs
+
 
 ##### CREATE CLASS FOR HANDLING PROTEOMICS DATA
 #----------------------------------------------------------------------------#
@@ -49,8 +51,6 @@ class dpea:
         ----------
         df : TYPE, optional
             DESCRIPTION. The default is None.
-        params : TYPE, optional
-            DESCRIPTION. The default is params.
 
         Returns
         -------
@@ -405,7 +405,7 @@ class dpea:
 
 
 ### calculate q-values
-        pm = pi0 * df_q.iloc[-1]['p-value']
+#         pm = pi0 * df_q.iloc[-1]['p-value']
         l_p = df_q['p-value'].tolist()[::-1]
         l_q = []
         
@@ -620,6 +620,126 @@ class dpea:
     
         return(df_sea)
 #----------------------------------------------------------------------------#
+
+
+
+
+
+
+
+
+
+
+
+##### CREATE CLASS FOR RUNNING STATISTICAL ENRICHMENT ANALYSIS
+#----------------------------------------------------------------------------#
+### create `enrichment` class for statistical enrichment analysis
+class enrichment:
+    '''
+    Handles & analyzes proteomics data. 
+    
+    REQUIREMENTS:
+        1. Mass spectrometry (MS) data w spectral counts. 
+    '''
+    
+#----------------------------------------------------------------------------#
+### initialization parameters... SHOULD I INCLUDE THESE PARAMETERS W THE EXPERIMENT FUNCTION INSTEAD?? THINK ABOUT HOW THIS WILL BE USED (NOT AS SINGLE SCRIPT, LIKE DONE BELOW)
+    def __init__(self, path_geneExp=None):
+        '''
+
+        Parameters
+        ----------
+        path_geneExp : string, required
+            Pathway to expression data, formatted w two columns representing protein accessions & fold-enrichment. The default is None.
+
+        Returns
+        -------
+        None.
+
+        '''
+        self.geneExp = path_geneExp
+#----------------------------------------------------------------------------#
+
+
+#----------------------------------------------------------------------------#
+### run set enrichment analysis via PANTHERDB
+    def run_SEA(self, annotDataSet='ANNOT_TYPE_ID_PANTHER_PATHWAY', organism=9606, correction='FDR', cutoff=None):
+        '''
+        
+        Parameters
+        ----------
+        path_geneExp : string, required
+            Path to .csv file containing enrichment data. As of now, must be a saved list of genes/proteins w two columns (accession number & fold-enrichment). The default is None.
+        annotDataSet : string, optional
+            Defines which annotation set to run analysis against. The default is 'ANNOT_TYPE_ID_PANTHER_PATHWAY', representing the PANTHER pathway set.
+        organism : integer, optional
+            Identifies organism for analysis. The default is 9606, or human. 
+        correction : string, optional
+            Correction for multiple hypothesis testing. The default is 'FDR', which controls false discovery rate. 
+        cutoff : float, optional
+            User-defined cutoff for defining statistical enrichment. The default is None & will return all results.
+    
+        Returns
+        -------
+        None.
+    
+        '''
+    
+### the data you want to pull
+        files = {'organism':organism, 'correction':correction, 'annotDataSet':annotDataSet, 'geneExp':open(self.geneExp, 'r')}
+    
+### url for PANTHER SEA API
+        url = 'http://pantherdb.org/services/oai/pantherdb/enrich/statenrich'
+    
+### check connection to API... it can be finnicky sometimes
+        try:
+            requests.head(url, timeout=5) 
+        except:
+            raise Exception('Cannot reach API. Exiting...')
+    
+### access API... requires POST call since you have to run enrichment analysis, not just pull data
+        with requests.post(url, files=files, timeout=5) as response: 
+    
+### extract enrichment results
+            df_enri = pd.DataFrame.from_dict(response.json()['results']['result'])
+            for idx, row in df_enri.iterrows():
+                try:
+                    df_enri.loc[idx, 'id'] = row['term']['id']
+                    df_enri.loc[idx, 'label'] = row['term']['label']
+                except:
+                    print(f'\nNo pathway data for index {idx}. Moving on...')
+            
+### format the data
+            l_seacols = ['id', 'label', 'number_in_list', 'fdr', 'pValue', 'plus_minus']
+            dict_seacols = {'id':'Pathway', 'label':'Description', 'number_in_list':'Count', 'fdr':'FDR', 'pValue':'p-value', 'plus_minus':'+/-'}
+            df_enri = df_enri[l_seacols].rename(columns=dict_seacols).sort_values(by='FDR').copy()
+                        
+### get list of pathway IDs for mapping to proteins
+            if cutoff:
+                df_enri = df_enri[df_enri['FDR'] < cutoff].copy()
+                
+            print(f'\n{df_enri}\n')
+            
+            return(df_enri)
+#----------------------------------------------------------------------------#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
