@@ -385,7 +385,7 @@ class dpea:
 ### train isotonic regression to estimate pi0... CURRENTLY UNTESTED WORKAROUND DUE TO LACK OF NORMAL CUBIC SPLINE IN PYTHON
         regress_pi = skliso.IsotonicRegression(increasing=False).fit(h_grid, l_pi) # WHAT ABOUT A NORMAL POLYNOMIAL REGRESSION VIA SKLEARN?
         pi0 = pd.Series(regress_pi.predict(h_grid)).value_counts().idxmax() # in essence, calulate the mode of the regression prediction
-        print(f'\nExpected proportion of null features:\t{pi0:.2f}\n(used for calculating q-values)')
+        print(f'\nExpected proportion of null features:\t\t{pi0:.2f}\n(used for calculating q-values)')
 
 
 ### quick diagnostic plot for estimation of pi0 required in calculating q-values... BREAK THIS OUT INTO SEPARATE METHOD?

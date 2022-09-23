@@ -112,6 +112,131 @@ df_outp = df_outp.sort_values(by=['significance', 'fold-change'], ascending=Fals
 df_outp.to_csv(os.path.join(path_outp, f'processed-{name_outp}.csv'))
 
 
+
+
+##### STATISTICAL ENRICHMENT ANALYSIS (SEA) USING PANTHERDB API
+#----------------------------------------------------------------------------#
+### get some parameters for analysis
+organism = 9606 # human
+correction = 'FDR' # p-value correction via false discovery rate
+annotDataSet = 'ANNOT_TYPE_ID_PANTHER_PATHWAY' # pathway set to search (e.g., Panther or GO Biological Process)... CODE THESE BETTER
+geneExp = os.path.join(path_outp, f'sea-{name_outp}.txt')
+
+### the data you want to pull
+files = {'organism':organism, 'correction':correction, 'annotDataSet':annotDataSet, 'geneExp':open(geneExp, 'r')}
+
+### url for PANTHER SEA API
+url = 'http://pantherdb.org/services/oai/pantherdb/enrich/statenrich'
+
+### check connection to API... it can be finnicky sometimes
+try:
+    requests.head(url, timeout=5) 
+except:
+    raise Exception('Cannot reach API. Exiting...')
+
+### access API... requires POST call since you have to run enrichment analysis, not just pull data
+# response = requests.post(url, files=files, timeout=5) 
+with requests.post(url, files=files, timeout=5) as response: 
+
+### extract enrichment results
+    df_results = pd.DataFrame.from_dict(response.json()['results']['result'])
+    print(df_results)
+#     l_id = []
+#     l_lab = []
+    for idx, row in df_results.iterrows():
+        try:
+            df_results.loc[idx, 'id'] = row['term']['id']
+            df_results.loc[idx, 'label'] = row['term']['label']
+        except:
+            print(f'\nNo data for index {idx}. Moving on...')
+    
+### format the data
+    l_seacols = ['id', 'label', 'number_in_list', 'fdr', 'pValue', 'plus_minus']
+#     l_seacols = ['pathway ID', 'pathway name', 'count', 'FDR', 'p-value', 'direction']
+    dict_seacols = {'id':'pathwayid', 'label':'pathwayname', 'number_in_list':'count', 'fdr':'FDR', 'pValue':'p-value', 'plus_minus':'direction'}
+#     l_seacols = df_results.columns
+    df_results = df_results[l_seacols].rename(columns=dict_seacols).copy()
+#     response.close()
+                
+### get list of pathway IDs for mapping to proteins
+    cutoff = 0.05
+#     l_id = df_results['id'].dropna().sort_values().tolist()
+    df_enri = df_results[df_results['FDR'] < cutoff].copy()
+#     l_id = df_enri['id'].tolist()
+    l_id = df_enri['pathwayid'].tolist()
+    
+### save to file
+df_enri.to_csv(os.path.join(path_outp, 'enriched.csv'), index=False)
+#----------------------------------------------------------------------------#
+
+
+# sys.exit()
+
+##### MATCH PROTEINS IN ENRICHED SET TO PATHWAYS FOUND IN ANALYSIS
+#----------------------------------------------------------------------------#
+### pulls gene data for those in enriched set... MAX 1000 @ A TIME, WILL NEED TO ACCOUNT!!!
+geneInputList = '%2C'.join(df_sea['Accession'].tolist()) # %2C serves as the delimiter for url
+url = 'http://pantherdb.org/services/oai/pantherdb/geneinfo?' + f'geneInputList={geneInputList}&organism={organism}'
+
+### access API... only pulling data for proteins in enrichment set
+with requests.get(url) as response:
+
+### count for determining fraction of instances mapped to particular annotation set
+    i_set = 0
+    i_tot = 0
+    
+### start dictionary for mapping proteins to pathways
+    dict_pp = {}
+    
+### filter data to proteins in enrichment list
+    for gene in response.json()['search']['mapped_genes']['gene']:
+    
+### check to ensure data completeness...
+        if ('annotation_type_list') not in gene.keys():
+            print(f'No annotations on {gene["accession"]}. Moving on...')
+            pass
+
+### if available, check annotations    
+        else:    
+            if type(gene['annotation_type_list']['annotation_data_type']) is not list: # in cases where only one entry, not a list
+                l_gene = [gene['annotation_type_list']['annotation_data_type']]
+            else:
+                l_gene = gene['annotation_type_list']['annotation_data_type']
+    
+### check for match w annotation data set (e.g., PANTHER Pathways or GO Biological Process) 
+            for annot in l_gene:
+                if annot['content'] == annotDataSet:
+                    
+                    if type(annot['annotation_list']['annotation']) is not list:
+                        l_annot = [annot['annotation_list']['annotation']]
+                    else:
+                        l_annot = annot['annotation_list']['annotation']
+
+### add data (right now just UniProtID) to pathway dictionary if so                    
+                    for a in l_annot:                        
+                        if a['id'] in l_id:
+                            uniprotid = gene['accession'].split('|')[-1].split('=')[-1]
+                    
+                            if a['id'] not in dict_pp.keys():
+                                dict_pp[a['id']] = [uniprotid]
+                            else:
+                                dict_pp[a['id']].append(uniprotid)
+
+### update count for number of proteins in set w matched pathways                            
+                    i_set += 1
+
+### update count for total number of proteins queried            
+        i_tot += 1
+
+### print statistic for user... tells you fraction of proteins matched to a pathway
+    print(f'\n{100*(1-(i_set/i_tot)):.1f}% protein IDs not found...')
+
+### format matched data & save to file for further processing
+df_protid = pd.DataFrame.from_dict(dict_pp, orient='index').melt(ignore_index=False).reset_index().dropna()[['index', 'value']].rename(columns={'index':'pathwayid', 'value':'uniprotid'}).sort_values(by=['pathwayid', 'uniprotid'])
+df_protid.to_csv(os.path.join(path_outp, 'genelist.csv'), index=False)
+#----------------------------------------------------------------------------#
+
+
 sys.exit()
 
 
@@ -125,8 +250,6 @@ first = dict_params['Treatments']['1']
 second = dict_params['Treatments']['2']
 names = 'Accession'
 test = test.experiment(first=first, second=second, names=names)
-
-
 
 
 sys.exit()
