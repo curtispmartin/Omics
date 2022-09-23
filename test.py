@@ -53,6 +53,8 @@ if not os.path.exists(path_outp):
     os.makedirs(path_outp)
 
 
+##### DIFFERENTIAL EXPRESSION ANALYSIS
+#----------------------------------------------------------------------------#
 ### create dpea object
 exp = omics.dpea(df=df)
 
@@ -110,8 +112,7 @@ df_outp.loc[df_outp[df_outp['q-value'] < alpha].index, 'significance'] = 1
 df_outp['significance'] = df_outp['significance'].fillna(0)
 df_outp = df_outp.sort_values(by=['significance', 'fold-change'], ascending=False)
 df_outp.to_csv(os.path.join(path_outp, f'processed-{name_outp}.csv'))
-
-
+#----------------------------------------------------------------------------#
 
 
 ##### STATISTICAL ENRICHMENT ANALYSIS (SEA) USING PANTHERDB API
@@ -120,79 +121,92 @@ df_outp.to_csv(os.path.join(path_outp, f'processed-{name_outp}.csv'))
 organism = 9606 # human
 correction = 'FDR' # p-value correction via false discovery rate
 annotDataSet = 'ANNOT_TYPE_ID_PANTHER_PATHWAY' # pathway set to search (e.g., Panther or GO Biological Process)... CODE THESE BETTER
-path_geneExp = os.path.join(path_outp, f'sea-{name_outp}.txt')
+path_data = os.path.join(path_outp, f'sea-{name_outp}.txt')
     
 ### run enrichment analysis & save to file
-enri = omics.enrichment(path_geneExp=path_geneExp)
-df_enri = enri.run_SEA(cutoff=0.05)
+enri = omics.enrichment(path_data=path_data)
+df_enri = enri.run_sea(cutoff=0.05)
 df_enri.to_csv(os.path.join(path_outp, f'enriched-{name_outp}.csv'), index=False)
 #----------------------------------------------------------------------------#
 
 
 ##### MATCH PROTEINS IN ENRICHED SET TO PATHWAYS FOUND IN ANALYSIS
 #----------------------------------------------------------------------------#
+
+### match proteins in sea data to enriched pathways & pull down related data from PANTHERDB
+def analyze(df_sea=None, l_seagenes=None, l_enripaths=None, organism=9606):
+
 ### pulls gene data for those in enriched set... MAX 1000 @ A TIME, WILL NEED TO ACCOUNT!!!
-geneInputList = '%2C'.join(df_sea['Accession'].tolist()) # %2C serves as the delimiter for url
-url = 'http://pantherdb.org/services/oai/pantherdb/geneinfo?' + f'geneInputList={geneInputList}&organism={organism}'
+    genes = '%2C'.join(l_seagenes) # %2C serves as the delimiter for url
+    url = 'http://pantherdb.org/services/oai/pantherdb/geneinfo?' + f'geneInputList={genes}&organism={organism}'
 
 ### get list of enriched pathways
-l_id = df_enri['Pathway'].tolist()
+#     l_enripaths = df_enri['Pathway'].tolist()
 
 ### access API... only pulling data for proteins in enrichment set
-with requests.get(url) as response:
+    with requests.get(url) as response:
 
 ### count for determining fraction of instances mapped to particular annotation set
-    i_set = 0
-    i_tot = 0
+        i_set = 0
+        i_tot = 0
     
 ### start dictionary for mapping proteins to pathways
-    dict_pp = {}
+        dict_pp = {}
     
 ### filter data to proteins in enrichment list
-    for gene in response.json()['search']['mapped_genes']['gene']:
+        for gene in response.json()['search']['mapped_genes']['gene']:
     
 ### check to ensure data completeness...
-        if ('annotation_type_list') not in gene.keys():
-            print(f'No annotations on {gene["accession"]}. Moving on...')
-            pass
+            if ('annotation_type_list') not in gene.keys():
+                print(f'No annotations on {gene["accession"]}. Moving on...')
+                pass
 
 ### if available, check annotations    
-        else:    
-            if type(gene['annotation_type_list']['annotation_data_type']) is not list: # in cases where only one entry, not a list
-                l_gene = [gene['annotation_type_list']['annotation_data_type']]
-            else:
-                l_gene = gene['annotation_type_list']['annotation_data_type']
+            else:    
+                if type(gene['annotation_type_list']['annotation_data_type']) is not list: # in cases where only one entry, not a list
+                    l_gene = [gene['annotation_type_list']['annotation_data_type']]
+                else:
+                    l_gene = gene['annotation_type_list']['annotation_data_type']
     
 ### check for match w annotation data set (e.g., PANTHER Pathways or GO Biological Process) 
-            for annot in l_gene:
-                if annot['content'] == annotDataSet:
-                    
-                    if type(annot['annotation_list']['annotation']) is not list:
-                        l_annot = [annot['annotation_list']['annotation']]
-                    else:
-                        l_annot = annot['annotation_list']['annotation']
+                for annot in l_gene:
+                    if annot['content'] == annotDataSet:
+                        
+                        if type(annot['annotation_list']['annotation']) is not list:
+                            l_annot = [annot['annotation_list']['annotation']]
+                        else:
+                            l_annot = annot['annotation_list']['annotation']
 
 ### add data (right now just UniProtID) to pathway dictionary if so                    
-                    for a in l_annot:                        
-                        if a['id'] in l_id:
-                            uniprotid = gene['accession'].split('|')[-1].split('=')[-1]
-                    
-                            if a['id'] not in dict_pp.keys():
-                                dict_pp[a['id']] = [uniprotid]
-                            else:
-                                dict_pp[a['id']].append(uniprotid)
+                        for a in l_annot:                        
+                            if a['id'] in l_enripaths:
+                                uniprotid = gene['accession'].split('|')[-1].split('=')[-1]
+                        
+                                if a['id'] not in dict_pp.keys():
+                                    dict_pp[a['id']] = [uniprotid]
+                                else:
+                                    dict_pp[a['id']].append(uniprotid)
 
 ### update count for number of proteins in set w matched pathways                            
-                    i_set += 1
+                        i_set += 1
 
 ### update count for total number of proteins queried            
-        i_tot += 1
+            i_tot += 1
 
 ### print statistic for user... tells you fraction of proteins matched to a pathway
-    print(f'\n{100*(1-(i_set/i_tot)):.1f}% protein IDs not found...')
+        print(f'\n{100*(1-(i_set/i_tot)):.1f}% protein IDs not found...')
+        
+### convert dictionary to long form dataframe    
+    df_protid = pd.DataFrame.from_dict(dict_pp, orient='index').melt(ignore_index=False).reset_index().dropna()[['index', 'value']].rename(columns={'index':'Pathway', 'value':'Accession'}).sort_values(by=['Pathway', 'Accession'])
 
-### format matched data & save to file for further processing
-df_protid = pd.DataFrame.from_dict(dict_pp, orient='index').melt(ignore_index=False).reset_index().dropna()[['index', 'value']].rename(columns={'index':'Pathway', 'value':'Accession'}).sort_values(by=['Pathway', 'Accession'])
+    return(df_protid)
+
+### format data for input into analyze function
+l_seagenes=df_sea['Accession'].tolist() # list of genes in enrichment set... need to look through all in set to match to pathways
+l_enripaths=df_enri['Pathway'].tolist() # enriched pathway accessions
+
+### analyze enrichment results & save to file
+df_protid = analyze(df_sea=df_sea, l_seagenes=l_seagenes, l_enripaths=l_enripaths)
 df_protid.to_csv(os.path.join(path_outp, 'genelist.csv'), index=False)
 #----------------------------------------------------------------------------#
 

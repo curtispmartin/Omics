@@ -644,7 +644,7 @@ class enrichment:
     
 #----------------------------------------------------------------------------#
 ### initialization parameters... SHOULD I INCLUDE THESE PARAMETERS W THE EXPERIMENT FUNCTION INSTEAD?? THINK ABOUT HOW THIS WILL BE USED (NOT AS SINGLE SCRIPT, LIKE DONE BELOW)
-    def __init__(self, path_geneExp=None):
+    def __init__(self, path_data=None):
         '''
 
         Parameters
@@ -657,13 +657,13 @@ class enrichment:
         None.
 
         '''
-        self.geneExp = path_geneExp
+        self.geneExp = path_data
 #----------------------------------------------------------------------------#
 
 
 #----------------------------------------------------------------------------#
 ### run set enrichment analysis via PANTHERDB
-    def run_SEA(self, annotDataSet='ANNOT_TYPE_ID_PANTHER_PATHWAY', organism=9606, correction='FDR', cutoff=None):
+    def run_sea(self, annotDataSet='ANNOT_TYPE_ID_PANTHER_PATHWAY', organism=9606, correction='FDR', cutoff=None):
         '''
         
         Parameters
