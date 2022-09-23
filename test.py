@@ -134,7 +134,7 @@ df_enri.to_csv(os.path.join(path_outp, f'enriched-{name_outp}.csv'), index=False
 #----------------------------------------------------------------------------#
 
 ### match proteins in sea data to enriched pathways & pull down related data from PANTHERDB
-def analyze(df_sea=None, l_seagenes=None, l_enripaths=None, organism=9606):
+def analyze(df_sea=None, l_seagenes=None, l_enripaths=None, organism=9606, annotDataSet='ANNOT_TYPE_ID_PANTHER_PATHWAY'):
 
 ### pulls gene data for those in enriched set... MAX 1000 @ A TIME, WILL NEED TO ACCOUNT!!!
     genes = '%2C'.join(l_seagenes) # %2C serves as the delimiter for url
@@ -202,11 +202,12 @@ def analyze(df_sea=None, l_seagenes=None, l_enripaths=None, organism=9606):
     return(df_protid)
 
 ### format data for input into analyze function
-l_seagenes=df_sea['Accession'].tolist() # list of genes in enrichment set... need to look through all in set to match to pathways
-l_enripaths=df_enri['Pathway'].tolist() # enriched pathway accessions
+# l_seagenes=df_sea['Accession'].tolist() # list of genes in enrichment set... need to look through all in set to match to pathways
+# l_enripaths=df_enri['Pathway'].tolist() # enriched pathway accessions
 
 ### analyze enrichment results & save to file
-df_protid = analyze(df_sea=df_sea, l_seagenes=l_seagenes, l_enripaths=l_enripaths)
+# df_protid = enri.analyze(df_sea=df_sea, l_seagenes=l_seagenes, l_enripaths=l_enripaths)
+df_protid = enri.analyze()
 df_protid.to_csv(os.path.join(path_outp, 'genelist.csv'), index=False)
 #----------------------------------------------------------------------------#
 
