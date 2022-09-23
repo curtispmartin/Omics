@@ -57,41 +57,46 @@ if not os.path.exists(path_outp):
 df_proc = pd.read_csv(os.path.join(path_outp, f'processed-{name_outp}.csv'))
 
 ### get enriched pathway data
-names = ['PANTHER Pathways', '#', '+/-', 'P value', 'FDR']
-df_enri = pd.read_csv(os.path.join(path_outp, f'enriched-{name_outp}.txt'), sep='\t', names=names, header=4)
+# names = ['PANTHER Pathways', '#', '+/-', 'P value', 'FDR']
+# df_enri = pd.read_csv(os.path.join(path_outp, f'enriched-{name_outp}.txt'), sep='\t', names=names, header=4)
+df_enri = pd.read_csv(os.path.join(path_outp, 'enriched.csv'))
 
 ### get pathway accession codes
-l_enri = df_enri['PANTHER Pathways'].str.split().str[-1].str.split('(').str[-1].str.split(')').str[0].tolist()
-df_enri['Pathway Accession'] = l_enri
-df_enri = df_enri[['Pathway Accession'] + names].copy()
+# l_enri = df_enri['PANTHER Pathways'].str.split().str[-1].str.split('(').str[-1].str.split(')').str[0].tolist()
+# df_enri['Pathway Accession'] = l_enri
+# df_enri = df_enri[['Pathway Accession'] + names].copy()
 
 
 ### get gene list derived from enrichment data via PANTHER
-names = ['Pathway Accession', 'Mapped IDs', 'Pathway Name', 'Components', 'Subfamilies', 'Associated']
-df_list = pd.read_csv(os.path.join(path_outp, f'genelist-{name_outp}.txt'), sep='\t', names=names, header=None)
+# names = ['Pathway Accession', 'Mapped IDs', 'Pathway Name', 'Components', 'Subfamilies', 'Associated']
+# df_list = pd.read_csv(os.path.join(path_outp, f'genelist-{name_outp}.txt'), sep='\t', names=names, header=None)
+df_list = pd.read_csv(os.path.join(path_outp, 'genelist.csv'))
 
 ### break down list into separate protein identifiers (using 'Mapped IDs')
-dict_prot = {}
-for idx, row in df_list.iterrows():
-    str_ids = row['Mapped IDs'].split(',')
-    l_ids = []
-    for item in str_ids:
-        l_ids.append(item.split('|')[-1].split('=')[-1])    
-    dict_prot[row['Pathway Accession']] = l_ids
+# dict_prot = {}
+# for idx, row in df_list.iterrows():
+#     str_ids = row['Mapped IDs'].split(',')
+#     l_ids = []
+#     for item in str_ids:
+#         l_ids.append(item.split('|')[-1].split('=')[-1])    
+#     dict_prot[row['Pathway Accession']] = l_ids
     
     
 ### get proteins associated w enriched pathways
-df_prot = pd.DataFrame()
-for idx, row in df_enri.iterrows():
-    pathway = row['Pathway Accession']
-    description = row['PANTHER Pathways']
+# df_prot = pd.DataFrame()
+# for idx, row in df_enri.iterrows():
+#     pathway = row['Pathway Accession']
+#     description = row['PANTHER Pathways']
 
-    df_int = df_proc[df_proc['Accession'].isin(dict_prot[pathway])].copy()
-    df_int['Pathway'] = pathway
-    df_int['Description'] = description
-    df_int = df_int.sort_values(by='GenSymbol')
+#     df_int = df_proc[df_proc['Accession'].isin(dict_prot[pathway])].copy()
+#     df_int['Pathway'] = pathway
+#     df_int['Description'] = description
+#     df_int = df_int.sort_values(by='GenSymbol')
     
-    df_prot = pd.concat([df_prot, df_int])
+#     df_prot = pd.concat([df_prot, df_int])
+
+### merge data
+df_prot = df_proc.merge(df_list.merge(df_enri, on='Pathway'), on='Accession', suffixes=(None, '_merged'), indicator=True).sort_values(by=['FDR', 'q-value'])
 
 
 ### define function for pulling protein name & information from UniProt API
@@ -144,7 +149,7 @@ def get_protname(accession=None, organism_id=9606):
 df_prot['Protein Name'] = df_prot['Accession'].apply(lambda accession: get_protname(accession=accession, organism_id=9606))
 
 ### reorganize for simple viewing
-df_prot = df_prot[['Pathway', 'Description', 'Accession', 'GenSymbol', 'fold-change', 'p-value', 'q-value', 'Protein Name']].reset_index(drop=True).copy()
+df_prot = df_prot[['Pathway', 'Description', 'FDR', 'Accession', 'GenSymbol', 'fold-change', 'p-value', 'q-value', 'Protein Name']].reset_index(drop=True).copy()
 
 ### save to file
 df_prot.to_csv(os.path.join(path_outp, f'protlist-{name_outp}.csv'), index=False)

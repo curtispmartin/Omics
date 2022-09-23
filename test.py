@@ -120,53 +120,52 @@ df_outp.to_csv(os.path.join(path_outp, f'processed-{name_outp}.csv'))
 organism = 9606 # human
 correction = 'FDR' # p-value correction via false discovery rate
 annotDataSet = 'ANNOT_TYPE_ID_PANTHER_PATHWAY' # pathway set to search (e.g., Panther or GO Biological Process)... CODE THESE BETTER
-geneExp = os.path.join(path_outp, f'sea-{name_outp}.txt')
+path_geneExp = os.path.join(path_outp, f'sea-{name_outp}.txt')
+
+
+def run_SEA(path_geneExp=None, annotDataSet='ANNOT_TYPE_ID_PANTHER_PATHWAY', organism=9606, correction='FDR', cutoff=None):
 
 ### the data you want to pull
-files = {'organism':organism, 'correction':correction, 'annotDataSet':annotDataSet, 'geneExp':open(geneExp, 'r')}
+    files = {'organism':organism, 'correction':correction, 'annotDataSet':annotDataSet, 'geneExp':open(path_geneExp, 'r')}
 
 ### url for PANTHER SEA API
-url = 'http://pantherdb.org/services/oai/pantherdb/enrich/statenrich'
+    url = 'http://pantherdb.org/services/oai/pantherdb/enrich/statenrich'
 
 ### check connection to API... it can be finnicky sometimes
-try:
-    requests.head(url, timeout=5) 
-except:
-    raise Exception('Cannot reach API. Exiting...')
+    try:
+        requests.head(url, timeout=5) 
+    except:
+        raise Exception('Cannot reach API. Exiting...')
 
 ### access API... requires POST call since you have to run enrichment analysis, not just pull data
-# response = requests.post(url, files=files, timeout=5) 
-with requests.post(url, files=files, timeout=5) as response: 
+    with requests.post(url, files=files, timeout=5) as response: 
 
 ### extract enrichment results
-    df_results = pd.DataFrame.from_dict(response.json()['results']['result'])
-    print(df_results)
-#     l_id = []
-#     l_lab = []
-    for idx, row in df_results.iterrows():
-        try:
-            df_results.loc[idx, 'id'] = row['term']['id']
-            df_results.loc[idx, 'label'] = row['term']['label']
-        except:
-            print(f'\nNo data for index {idx}. Moving on...')
-    
+        df_enri = pd.DataFrame.from_dict(response.json()['results']['result'])
+        for idx, row in df_enri.iterrows():
+            try:
+                df_enri.loc[idx, 'id'] = row['term']['id']
+                df_enri.loc[idx, 'label'] = row['term']['label']
+            except:
+                print(f'\nNo pathway data for index {idx}. Moving on...')
+        
 ### format the data
-    l_seacols = ['id', 'label', 'number_in_list', 'fdr', 'pValue', 'plus_minus']
-#     l_seacols = ['pathway ID', 'pathway name', 'count', 'FDR', 'p-value', 'direction']
-    dict_seacols = {'id':'pathwayid', 'label':'pathwayname', 'number_in_list':'count', 'fdr':'FDR', 'pValue':'p-value', 'plus_minus':'direction'}
-#     l_seacols = df_results.columns
-    df_results = df_results[l_seacols].rename(columns=dict_seacols).copy()
-#     response.close()
-                
+        l_seacols = ['id', 'label', 'number_in_list', 'fdr', 'pValue', 'plus_minus']
+        dict_seacols = {'id':'Pathway', 'label':'Description', 'number_in_list':'Count', 'fdr':'FDR', 'pValue':'p-value', 'plus_minus':'+/-'}
+        df_enri = df_enri[l_seacols].rename(columns=dict_seacols).sort_values(by='FDR').copy()
+                    
 ### get list of pathway IDs for mapping to proteins
-    cutoff = 0.05
-#     l_id = df_results['id'].dropna().sort_values().tolist()
-    df_enri = df_results[df_results['FDR'] < cutoff].copy()
-#     l_id = df_enri['id'].tolist()
-    l_id = df_enri['pathwayid'].tolist()
+#         cutoff = 0.05
+        if cutoff:
+            df_enri = df_enri[df_enri['FDR'] < cutoff].copy()
+            
+        print(f'\n{df_enri}\n')
+        
+        return(df_enri)
     
-### save to file
-df_enri.to_csv(os.path.join(path_outp, 'enriched.csv'), index=False)
+### run enrichment analysis & save to file
+df_enri = run_SEA(path_geneExp=path_geneExp, cutoff=0.05)
+df_enri.to_csv(os.path.join(path_outp, f'enriched-{name_outp}.csv'), index=False)
 #----------------------------------------------------------------------------#
 
 
@@ -177,6 +176,9 @@ df_enri.to_csv(os.path.join(path_outp, 'enriched.csv'), index=False)
 ### pulls gene data for those in enriched set... MAX 1000 @ A TIME, WILL NEED TO ACCOUNT!!!
 geneInputList = '%2C'.join(df_sea['Accession'].tolist()) # %2C serves as the delimiter for url
 url = 'http://pantherdb.org/services/oai/pantherdb/geneinfo?' + f'geneInputList={geneInputList}&organism={organism}'
+
+### get list of enriched pathways
+l_id = df_enri['Pathway'].tolist()
 
 ### access API... only pulling data for proteins in enrichment set
 with requests.get(url) as response:
@@ -232,7 +234,7 @@ with requests.get(url) as response:
     print(f'\n{100*(1-(i_set/i_tot)):.1f}% protein IDs not found...')
 
 ### format matched data & save to file for further processing
-df_protid = pd.DataFrame.from_dict(dict_pp, orient='index').melt(ignore_index=False).reset_index().dropna()[['index', 'value']].rename(columns={'index':'pathwayid', 'value':'uniprotid'}).sort_values(by=['pathwayid', 'uniprotid'])
+df_protid = pd.DataFrame.from_dict(dict_pp, orient='index').melt(ignore_index=False).reset_index().dropna()[['index', 'value']].rename(columns={'index':'Pathway', 'value':'Accession'}).sort_values(by=['Pathway', 'Accession'])
 df_protid.to_csv(os.path.join(path_outp, 'genelist.csv'), index=False)
 #----------------------------------------------------------------------------#
 
