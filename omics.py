@@ -651,7 +651,7 @@ class enrichment:
         '''
         self.geneExp = path_data
         try:
-            self.seadata = pd.read_csv(self.geneExp, sep='\t', header=None) # GOING TO NEED TO GENERALIZE!
+            self.seadata = pd.read_csv(self.geneExp, sep='\t', header=None) # GOING TO NEED TO ACCOUNT FOR OTHER DATA TYPES
         except:
             raise Exception('\nCannot open expression data. Exiting...')
             
@@ -664,14 +664,14 @@ class enrichment:
 
 #----------------------------------------------------------------------------#
 ### run set enrichment analysis via PANTHERDB
-    def run_sea(self, annotDataSet='ANNOT_TYPE_ID_PANTHER_PATHWAY', organism=9606, correction='FDR', cutoff=None):
+    def run_sea(self, annotset='ANNOT_TYPE_ID_PANTHER_PATHWAY', organism=9606, correction='FDR', cutoff=None):
         '''
         
         Parameters
         ----------
         path_geneExp : string, required
             Path to .csv file containing enrichment data. As of now, must be a saved list of genes/proteins w two columns (accession number & fold-enrichment). The default is None.
-        annotDataSet : string, optional
+        annotset : string, optional
             Defines which annotation set to run analysis against. The default is 'ANNOT_TYPE_ID_PANTHER_PATHWAY', representing the PANTHER pathway set.
         organism : integer, optional
             Identifies organism for analysis. The default is 9606, or human. 
@@ -687,7 +687,7 @@ class enrichment:
         '''
     
 ### the data you want to pull
-        files = {'organism':organism, 'correction':correction, 'annotDataSet':annotDataSet, 'geneExp':open(self.geneExp, 'r')}
+        files = {'organism':organism, 'correction':correction, 'annotDataSet':annotset, 'geneExp':open(self.geneExp, 'r')}
     
 ### url for PANTHER SEA API
         url = 'http://pantherdb.org/services/oai/pantherdb/enrich/statenrich'
@@ -730,7 +730,7 @@ class enrichment:
 
 #----------------------------------------------------------------------------#
 ### match proteins in sea data to enriched pathways & pull down related data from PANTHERDB
-    def analyze(self, annotDataSet='ANNOT_TYPE_ID_PANTHER_PATHWAY', organism=9606, df_sea=None, l_seagenes=None, l_enripaths=None):
+    def match_sea(self, annotset='ANNOT_TYPE_ID_PANTHER_PATHWAY', organism=9606, df_sea=None, l_seagenes=None, l_enripaths=None):
 
 ### use enrichment data resulting from run_sea() method, if not provided
         if not df_sea:
@@ -778,7 +778,7 @@ class enrichment:
         
 ### check for match w annotation data set (e.g., PANTHER Pathways or GO Biological Process) 
                     for annot in l_gene:
-                        if annot['content'] == annotDataSet:
+                        if annot['content'] == annotset:
                             
                             if type(annot['annotation_list']['annotation']) is not list:
                                 l_annot = [annot['annotation_list']['annotation']]
@@ -811,7 +811,51 @@ class enrichment:
 
 
 
-
+### define function for pulling protein name & information from UniProt API
+    def get_protname(self, accession=None, organism_id=9606):
+        '''
+    
+        Parameters
+        ----------
+        accession : string, required
+            The UniProt accession number for the protein of interest. The default is 'P60709'.
+        organism_id : numeric, optional
+            The organism ID for searching proteins. The default is 9606, the ID for humans.
+    
+        Returns
+        -------
+        Right now, only the protein name. 
+    
+        '''
+    
+### ensure accession provided before anything else
+        if not accession:
+            raise Exception('\nWarning: No protein accession provided. Exiting...')
+        
+### define url for pulling protein name from API... IS THERE AN EASIER WAY? 
+        url = f'https://rest.uniprot.org/uniprotkb/search?query=accession:{accession}&organism_id:{organism_id}&columns=protein_name'    
+    
+### request uniprot API & print status
+#         response = requests.get(url)
+        with requests.get(url) as response:
+            if response.status_code != 200:
+                raise Exception(f'\nCaution: Link to UniProt API failed for {accession}. Exiting...')
+            
+### pull data of interest... right now, just uniprotid (for confirmation) & protein name
+#             uniprotid = response.json()['results'][0]['uniProtkbId']
+            protname = response.json()['results'][0]['proteinDescription']['recommendedName']['fullName']['value']
+        
+### message for user
+            if len(protname) > 50:
+                protname_print = protname.split(',')[0]
+            else:
+                protname_print = protname
+            print(f'Working on {accession}... {protname_print}')
+            
+### close request... not sure this is necessary but can't hurt
+#             response.close()
+        
+        return(protname)
 
 
 

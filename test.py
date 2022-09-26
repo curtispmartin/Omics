@@ -120,96 +120,75 @@ df_outp.to_csv(os.path.join(path_outp, f'processed-{name_outp}.csv'))
 ### get some parameters for analysis
 organism = 9606 # human
 correction = 'FDR' # p-value correction via false discovery rate
-annotDataSet = 'ANNOT_TYPE_ID_PANTHER_PATHWAY' # pathway set to search (e.g., Panther or GO Biological Process)... CODE THESE BETTER
+annot = 'ANNOT_TYPE_ID_PANTHER_PATHWAY' # pathway set to search (e.g., Panther or GO Biological Process)... CODE THESE BETTER
 path_data = os.path.join(path_outp, f'sea-{name_outp}.txt')
     
 ### run enrichment analysis & save to file
 enri = omics.enrichment(path_data=path_data)
 df_enri = enri.run_sea(cutoff=0.05)
 df_enri.to_csv(os.path.join(path_outp, f'enriched-{name_outp}.csv'), index=False)
-#----------------------------------------------------------------------------#
 
-
-##### MATCH PROTEINS IN ENRICHED SET TO PATHWAYS FOUND IN ANALYSIS
-#----------------------------------------------------------------------------#
-
-### match proteins in sea data to enriched pathways & pull down related data from PANTHERDB
-def analyze(df_sea=None, l_seagenes=None, l_enripaths=None, organism=9606, annotDataSet='ANNOT_TYPE_ID_PANTHER_PATHWAY'):
-
-### pulls gene data for those in enriched set... MAX 1000 @ A TIME, WILL NEED TO ACCOUNT!!!
-    genes = '%2C'.join(l_seagenes) # %2C serves as the delimiter for url
-    url = 'http://pantherdb.org/services/oai/pantherdb/geneinfo?' + f'geneInputList={genes}&organism={organism}'
-
-### get list of enriched pathways
-#     l_enripaths = df_enri['Pathway'].tolist()
-
-### access API... only pulling data for proteins in enrichment set
-    with requests.get(url) as response:
-
-### count for determining fraction of instances mapped to particular annotation set
-        i_set = 0
-        i_tot = 0
-    
-### start dictionary for mapping proteins to pathways
-        dict_pp = {}
-    
-### filter data to proteins in enrichment list
-        for gene in response.json()['search']['mapped_genes']['gene']:
-    
-### check to ensure data completeness...
-            if ('annotation_type_list') not in gene.keys():
-                print(f'No annotations on {gene["accession"]}. Moving on...')
-                pass
-
-### if available, check annotations    
-            else:    
-                if type(gene['annotation_type_list']['annotation_data_type']) is not list: # in cases where only one entry, not a list
-                    l_gene = [gene['annotation_type_list']['annotation_data_type']]
-                else:
-                    l_gene = gene['annotation_type_list']['annotation_data_type']
-    
-### check for match w annotation data set (e.g., PANTHER Pathways or GO Biological Process) 
-                for annot in l_gene:
-                    if annot['content'] == annotDataSet:
-                        
-                        if type(annot['annotation_list']['annotation']) is not list:
-                            l_annot = [annot['annotation_list']['annotation']]
-                        else:
-                            l_annot = annot['annotation_list']['annotation']
-
-### add data (right now just UniProtID) to pathway dictionary if so                    
-                        for a in l_annot:                        
-                            if a['id'] in l_enripaths:
-                                uniprotid = gene['accession'].split('|')[-1].split('=')[-1]
-                        
-                                if a['id'] not in dict_pp.keys():
-                                    dict_pp[a['id']] = [uniprotid]
-                                else:
-                                    dict_pp[a['id']].append(uniprotid)
-
-### update count for number of proteins in set w matched pathways                            
-                        i_set += 1
-
-### update count for total number of proteins queried            
-            i_tot += 1
-
-### print statistic for user... tells you fraction of proteins matched to a pathway
-        print(f'\n{100*(1-(i_set/i_tot)):.1f}% protein IDs not found...')
-        
-### convert dictionary to long form dataframe    
-    df_protid = pd.DataFrame.from_dict(dict_pp, orient='index').melt(ignore_index=False).reset_index().dropna()[['index', 'value']].rename(columns={'index':'Pathway', 'value':'Accession'}).sort_values(by=['Pathway', 'Accession'])
-
-    return(df_protid)
-
-### format data for input into analyze function
-# l_seagenes=df_sea['Accession'].tolist() # list of genes in enrichment set... need to look through all in set to match to pathways
-# l_enripaths=df_enri['Pathway'].tolist() # enriched pathway accessions
-
-### analyze enrichment results & save to file
-# df_protid = enri.analyze(df_sea=df_sea, l_seagenes=l_seagenes, l_enripaths=l_enripaths)
-df_protid = enri.analyze()
+### match proteins in data to pathways identified by enrichement analysis
+df_protid = enri.match_sea()
 df_protid.to_csv(os.path.join(path_outp, f'genelist-{name_outp}.csv'), index=False)
+
+### get processed data generated from `dpea` pull... CAN I GET RID OF THIS NOW THAT IT'S IN THE SAME SCRIPT?
+df_proc = pd.read_csv(os.path.join(path_outp, f'processed-{name_outp}.csv'))
+
+### get enriched pathway data... CAN I GET RID OF THIS NOW THAT IT'S IN THE SAME SCRIPT?
+df_enri = pd.read_csv(os.path.join(path_outp, f'enriched-{name_outp}.csv'))
+
+### get gene list derived from enrichment data via PANTHER... CAN I GET RID OF THIS NOW THAT IT'S IN THE SAME SCRIPT?
+df_list = pd.read_csv(os.path.join(path_outp, f'genelist-{name_outp}.csv'))
+
+### merge data
+# df_prot = df_proc.merge(df_list.merge(df_enri, on='Pathway'), on='Accession', suffixes=(None, '_mergecheck'), indicator=True).sort_values(by=['FDR', 'q-value'])
+df_prot = df_proc.merge(df_list.merge(df_enri, on='Pathway'), on='Accession', suffixes=(None, '_mergecheck')).sort_values(by=['FDR', 'q-value'])
+
+### get protein names for proteins in enriched sets
+df_prot['Protein Name'] = df_prot['Accession'].apply(lambda accession: enri.get_protname(accession=accession, organism_id=9606))
+
+### save results
+df_prot.to_csv(os.path.join(path_outp, f'results-{name_outp}.csv'), index=False)
 #----------------------------------------------------------------------------#
+
+
+sys.exit()
+
+
+##### DOT PLOT FOR VISUALIZATION OF ENRICHMENT RESULTS
+#----------------------------------------------------------------------------#
+### format data for dot plot
+df_plot = df_prot.sort_values('fold-change', ascending=False)
+df_plot.loc[df_plot[df_plot['fold-change'] >= 1.0].index, 'direction'] = '+'
+df_plot.loc[df_plot[df_plot['fold-change'] <= 1.0].index, 'direction'] = '-'
+df_plot.loc[df_plot[df_plot['direction'] == '-'].index, 'fold-change'] = -1 / df_plot['fold-change'] # essentially want to plot absolute value for easier interpretation
+nplot = 50
+df_plot = pd.concat([df_plot[df_plot['direction'] == '+'].head(n=nplot), df_plot[df_plot['direction'] == '-'].tail(n=nplot)])
+df_plot = df_plot.sort_values(by='GenSymbol')
+df_plot['Description'] = df_plot['Description'].str.split().str[:2].str.join(sep=' ')
+df_plot['-log10q'] = -np.log10(df_plot['q-value'])
+
+### a hybrid b/w a heat map & a dot plot
+sns.set_theme(style='whitegrid')
+# g = sns.relplot(data=df_plot, x='GenSymbol', y='Description', hue='q-value', size='fold-change', palette='Reds_r', hue_norm=(0, 1), edgecolor='k', height=10, sizes=(50, 250), size_norm=(1, 10))
+g = sns.relplot(data=df_plot, x='GenSymbol', y='Description', hue='fold-change', size='-log10q', palette='vlag', hue_norm=(-5, 5), edgecolor='k', height=10, sizes=(50, 250), size_norm=(0, 2))
+
+### improve plot formatting
+g.set(xlabel='', ylabel='', title='Proteins in Enriched Pathways', aspect='equal')
+g.despine(left=True, bottom=True)
+g.ax.margins(.05)
+for label in g.ax.get_xticklabels():
+    label.set_rotation(90)
+for artist in g.legend.legendHandles:
+    artist.set_edgecolor('k')
+
+g.savefig(os.path.join(path_outp, f'dot-{name_outp}.png'), dpi=300)
+#----------------------------------------------------------------------------#
+
+
+
+
 
 
 sys.exit()
