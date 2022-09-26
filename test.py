@@ -53,6 +53,10 @@ if not os.path.exists(path_outp):
     os.makedirs(path_outp)
 
 
+### open file for writing run commentary
+# path_comments = os.path.join(path_outp, 'output.txt')
+
+
 ##### DIFFERENTIAL EXPRESSION ANALYSIS
 #----------------------------------------------------------------------------#
 ### create dpea object
