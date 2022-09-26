@@ -52,9 +52,9 @@ path_outp = os.path.join(os.getcwd(), 'Output', name_inpu, name_outp)
 if not os.path.exists(path_outp):
     os.makedirs(path_outp)
 
-
 ### open file for writing run commentary
-# path_comments = os.path.join(path_outp, 'output.txt')
+path_log = os.path.join(path_outp, f'log-{name_outp}.txt')
+sys.stdout = open(path_log, 'w')
 
 
 ##### DIFFERENTIAL EXPRESSION ANALYSIS
@@ -157,7 +157,7 @@ df_prot.to_csv(os.path.join(path_outp, f'results-{name_outp}.csv'), index=False)
 #----------------------------------------------------------------------------#
 
 
-sys.exit()
+# sys.exit()
 
 
 ##### DOT PLOT FOR VISUALIZATION OF ENRICHMENT RESULTS
