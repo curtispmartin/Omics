@@ -59,7 +59,7 @@ df_proc = pd.read_csv(os.path.join(path_outp, f'processed-{name_outp}.csv'))
 ### get enriched pathway data
 # names = ['PANTHER Pathways', '#', '+/-', 'P value', 'FDR']
 # df_enri = pd.read_csv(os.path.join(path_outp, f'enriched-{name_outp}.txt'), sep='\t', names=names, header=4)
-df_enri = pd.read_csv(os.path.join(path_outp, 'enriched.csv'))
+df_enri = pd.read_csv(os.path.join(path_outp, f'enriched-{name_outp}.csv'))
 
 ### get pathway accession codes
 # l_enri = df_enri['PANTHER Pathways'].str.split().str[-1].str.split('(').str[-1].str.split(')').str[0].tolist()
@@ -70,7 +70,7 @@ df_enri = pd.read_csv(os.path.join(path_outp, 'enriched.csv'))
 ### get gene list derived from enrichment data via PANTHER
 # names = ['Pathway Accession', 'Mapped IDs', 'Pathway Name', 'Components', 'Subfamilies', 'Associated']
 # df_list = pd.read_csv(os.path.join(path_outp, f'genelist-{name_outp}.txt'), sep='\t', names=names, header=None)
-df_list = pd.read_csv(os.path.join(path_outp, 'genelist.csv'))
+df_list = pd.read_csv(os.path.join(path_outp, f'genelist-{name_outp}.csv'))
 
 ### break down list into separate protein identifiers (using 'Mapped IDs')
 # dict_prot = {}
@@ -97,6 +97,9 @@ df_list = pd.read_csv(os.path.join(path_outp, 'genelist.csv'))
 
 ### merge data
 df_prot = df_proc.merge(df_list.merge(df_enri, on='Pathway'), on='Accession', suffixes=(None, '_merged'), indicator=True).sort_values(by=['FDR', 'q-value'])
+
+
+# sys.exit()
 
 
 ### define function for pulling protein name & information from UniProt API

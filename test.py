@@ -208,7 +208,7 @@ def analyze(df_sea=None, l_seagenes=None, l_enripaths=None, organism=9606, annot
 ### analyze enrichment results & save to file
 # df_protid = enri.analyze(df_sea=df_sea, l_seagenes=l_seagenes, l_enripaths=l_enripaths)
 df_protid = enri.analyze()
-df_protid.to_csv(os.path.join(path_outp, 'genelist.csv'), index=False)
+df_protid.to_csv(os.path.join(path_outp, f'genelist-{name_outp}.csv'), index=False)
 #----------------------------------------------------------------------------#
 
 
