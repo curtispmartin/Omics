@@ -3,7 +3,7 @@
 '''
 Created on Mon Aug 29 22:43:22 2022
 
-@author: martincup
+@author: Curtis P. Martin
 
 '''
 

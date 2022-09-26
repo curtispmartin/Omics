@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
+'''
 Created on Tue Apr 12 12:22:56 2022
 
 @author: Curtis P. Martin
 
-Parameters
---------------
-alpha: p-value considered "statistically significant". Currently only used for plotting
-fcthresh: fold-change considered "signficant". log2() transformation applied later
-
-"""
+'''
 
 ### import modules
 import os
