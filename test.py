@@ -52,8 +52,14 @@ path_outp = os.path.join(os.getcwd(), 'Output', name_inpu, name_outp)
 if not os.path.exists(path_outp):
     os.makedirs(path_outp)
 
+### new sub-directory for results given annotation dataset... NEEDED FOR ENRICHMENT ANALYSIS
+annotset = dict_params['Parameters']['annotset']
+path_outset = os.path.join(path_outp, f'{annotset}')
+if not os.path.exists(path_outset):
+    os.makedirs(path_outset)
+    
 ### open file for writing run commentary
-path_log = os.path.join(path_outp, f'log-{name_outp}.txt')
+path_log = os.path.join(path_outset, f'log-{name_outp}.txt')
 sys.stdout = open(path_log, 'w')
 
 
@@ -124,26 +130,25 @@ df_outp.to_csv(os.path.join(path_outp, f'processed-{name_outp}.csv'))
 ### get some parameters for analysis
 organism = 9606 # human
 correction = 'FDR' # p-value correction via false discovery rate
-annot = 'ANNOT_TYPE_ID_PANTHER_PATHWAY' # pathway set to search (e.g., Panther or GO Biological Process)... CODE THESE BETTER
 path_data = os.path.join(path_outp, f'sea-{name_outp}.txt')
-    
+
 ### run enrichment analysis & save to file
 enri = omics.enrichment(path_data=path_data)
-df_enri = enri.run_sea(cutoff=0.05)
-df_enri.to_csv(os.path.join(path_outp, f'enriched-{name_outp}.csv'), index=False)
+df_enri = enri.run_sea(annotset=annotset, cutoff=0.05)
+df_enri.to_csv(os.path.join(path_outset, f'enriched-{name_outp}.csv'), index=False)
 
 ### match proteins in data to pathways identified by enrichement analysis
-df_protid = enri.match_sea()
-df_protid.to_csv(os.path.join(path_outp, f'genelist-{name_outp}.csv'), index=False)
+df_protid = enri.match_sea(annotset=annotset)
+df_protid.to_csv(os.path.join(path_outset, f'genelist-{name_outp}.csv'), index=False)
 
 ### get processed data generated from `dpea` pull... CAN I GET RID OF THIS NOW THAT IT'S IN THE SAME SCRIPT?
 df_proc = pd.read_csv(os.path.join(path_outp, f'processed-{name_outp}.csv'))
 
 ### get enriched pathway data... CAN I GET RID OF THIS NOW THAT IT'S IN THE SAME SCRIPT?
-df_enri = pd.read_csv(os.path.join(path_outp, f'enriched-{name_outp}.csv'))
+# df_enri = pd.read_csv(os.path.join(path_outset, f'enriched-{name_outp}.csv'))
 
 ### get gene list derived from enrichment data via PANTHER... CAN I GET RID OF THIS NOW THAT IT'S IN THE SAME SCRIPT?
-df_list = pd.read_csv(os.path.join(path_outp, f'genelist-{name_outp}.csv'))
+df_list = pd.read_csv(os.path.join(path_outset, f'genelist-{name_outp}.csv'))
 
 ### merge data
 # df_prot = df_proc.merge(df_list.merge(df_enri, on='Pathway'), on='Accession', suffixes=(None, '_mergecheck'), indicator=True).sort_values(by=['FDR', 'q-value'])
@@ -153,7 +158,7 @@ df_prot = df_proc.merge(df_list.merge(df_enri, on='Pathway'), on='Accession', su
 df_prot['Protein Name'] = df_prot['Accession'].apply(lambda accession: enri.get_protname(accession=accession, organism_id=9606))
 
 ### save results
-df_prot.to_csv(os.path.join(path_outp, f'results-{name_outp}.csv'), index=False)
+df_prot.to_csv(os.path.join(path_outset, f'results-{name_outp}.csv'), index=False)
 #----------------------------------------------------------------------------#
 
 
@@ -166,20 +171,28 @@ df_prot.to_csv(os.path.join(path_outp, f'results-{name_outp}.csv'), index=False)
 df_plot = df_prot.sort_values('fold-change', ascending=False)
 df_plot.loc[df_plot[df_plot['fold-change'] >= 1.0].index, 'direction'] = '+'
 df_plot.loc[df_plot[df_plot['fold-change'] <= 1.0].index, 'direction'] = '-'
-df_plot.loc[df_plot[df_plot['direction'] == '-'].index, 'fold-change'] = -1 / df_plot['fold-change'] # essentially want to plot absolute value for easier interpretation
-nplot = 50
+df_plot.loc[df_plot[df_plot['direction'] == '-'].index, 'fold-change'] = -1 / df_plot['fold-change'] # essentially want negative & positive fold-change to be treated equivalently
+nplot = 25
+
 df_plot = pd.concat([df_plot[df_plot['direction'] == '+'].head(n=nplot), df_plot[df_plot['direction'] == '-'].tail(n=nplot)])
 df_plot = df_plot.sort_values(by='GenSymbol')
 df_plot['Description'] = df_plot['Description'].str.split().str[:2].str.join(sep=' ')
 df_plot['-log10q'] = -np.log10(df_plot['q-value'])
 
+df_plot = df_plot.rename(columns={'fold-change':'Fold Change', '-log10q':'Significance'})
+
 ### a hybrid b/w a heat map & a dot plot
 sns.set_theme(style='whitegrid')
-# g = sns.relplot(data=df_plot, x='GenSymbol', y='Description', hue='q-value', size='fold-change', palette='Reds_r', hue_norm=(0, 1), edgecolor='k', height=10, sizes=(50, 250), size_norm=(1, 10))
-g = sns.relplot(data=df_plot, x='GenSymbol', y='Description', hue='fold-change', size='-log10q', palette='vlag', hue_norm=(-5, 5), edgecolor='k', height=10, sizes=(50, 250), size_norm=(0, 2))
+
+hue_norm = (-np.round(np.max(np.abs(df_plot['Fold Change']))), np.round(np.max(np.abs(df_plot['Fold Change']))))
+size_norm = (0, 2) # so far holds up well...
+sizes = (((2 * nplot) * 20) / df_plot.shape[0] , ((2 * nplot) * 100) / df_plot.shape[0])
+
+g = sns.relplot(data=df_plot, x='GenSymbol', y='Description', hue='Fold Change', size='Significance', palette='vlag', hue_norm=hue_norm, edgecolor='k', height=10, sizes=sizes, size_norm=size_norm)
 
 ### improve plot formatting
-g.set(xlabel='', ylabel='', title='Proteins in Enriched Pathways', aspect='equal')
+# g.set(xlabel='', ylabel='', title=f'Proteins in Enriched Pathways ({enri.dict_annotset[annotset]})', aspect='equal')
+g.set(xlabel='', ylabel='', title=f'Proteins in Enriched Pathways ({annotset})', aspect='equal')
 g.despine(left=True, bottom=True)
 g.ax.margins(.05)
 for label in g.ax.get_xticklabels():
@@ -187,7 +200,7 @@ for label in g.ax.get_xticklabels():
 for artist in g.legend.legendHandles:
     artist.set_edgecolor('k')
 
-g.savefig(os.path.join(path_outp, f'dot-{name_outp}.png'), dpi=300)
+g.savefig(os.path.join(path_outset, f'dot-{name_outp}.png'), dpi=300)
 #----------------------------------------------------------------------------#
 
 

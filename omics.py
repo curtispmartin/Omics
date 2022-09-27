@@ -654,12 +654,21 @@ class enrichment:
             self.seagenes = self.seadata[accession].tolist()
         except:
             raise Exception('\nCannot find accession data. Exiting...')
+
+### dictionary of pathways one can use... simplifies the process a bit for the user
+        self.dict_annotset = {
+            'GOMF':'GO:0003674', # GO molecular functions
+            'GOBP':'GO:0008150', # GO biological process
+            'Panther':'ANNOT_TYPE_ID_PANTHER_PATHWAY',
+            'Reactome':'ANNOT_TYPE_ID_REACTOME_PATHWAY'
+            }
 #----------------------------------------------------------------------------#
 
 
 #----------------------------------------------------------------------------#
 ### run set enrichment analysis via PANTHERDB
-    def run_sea(self, annotset='ANNOT_TYPE_ID_PANTHER_PATHWAY', organism=9606, correction='FDR', cutoff=None):
+#     def run_sea(self, annotset='ANNOT_TYPE_ID_PANTHER_PATHWAY', organism=9606, correction='FDR', cutoff=None):
+    def run_sea(self, annotset='Panther', organism=9606, correction='FDR', cutoff=None):
         '''
         
         Parameters
@@ -682,7 +691,7 @@ class enrichment:
         '''
     
 ### the data you want to pull
-        files = {'organism':organism, 'correction':correction, 'annotDataSet':annotset, 'geneExp':open(self.geneExp, 'r')}
+        files = {'organism':organism, 'correction':correction, 'annotDataSet':self.dict_annotset[annotset], 'geneExp':open(self.geneExp, 'r')}
     
 ### url for PANTHER SEA API
         url = 'http://pantherdb.org/services/oai/pantherdb/enrich/statenrich'
@@ -725,7 +734,8 @@ class enrichment:
 
 #----------------------------------------------------------------------------#
 ### match proteins in sea data to enriched pathways & pull down related data from PANTHERDB
-    def match_sea(self, annotset='ANNOT_TYPE_ID_PANTHER_PATHWAY', organism=9606, df_sea=None, l_seagenes=None, l_enripaths=None):
+#     def match_sea(self, annotset='ANNOT_TYPE_ID_PANTHER_PATHWAY', organism=9606, df_sea=None, l_seagenes=None, l_enripaths=None):
+    def match_sea(self, annotset='Panther', organism=9606, df_sea=None, l_seagenes=None, l_enripaths=None):
 
 ### use enrichment data resulting from run_sea() method, if not provided
         if not df_sea:
@@ -773,7 +783,7 @@ class enrichment:
         
 ### check for match w annotation data set (e.g., PANTHER Pathways or GO Biological Process) 
                     for annot in l_gene:
-                        if annot['content'] == annotset:
+                        if annot['content'] == self.dict_annotset[annotset]:
                             
                             if type(annot['annotation_list']['annotation']) is not list:
                                 l_annot = [annot['annotation_list']['annotation']]
