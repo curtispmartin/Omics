@@ -662,6 +662,9 @@ class enrichment:
             'Panther':'ANNOT_TYPE_ID_PANTHER_PATHWAY',
             'Reactome':'ANNOT_TYPE_ID_REACTOME_PATHWAY'
             }
+        
+### instantiate dictionary for storting protein names... meant to speed things up
+        self.dict_protnames = {}
 #----------------------------------------------------------------------------#
 
 
@@ -836,26 +839,35 @@ class enrichment:
 ### ensure accession provided before anything else
         if not accession:
             raise Exception('\nWarning: No protein accession provided. Exiting...')
+            
+### pull protein name from local dictionary if already searched for...
+        if accession in self.dict_protnames.keys():
+            message = f'{accession} already identified'
+            protname = self.dict_protnames[accession]
+            
+### ...otherwise, pull from PANTHER
+        else:
+            message = f'Working on {accession}'
         
 ### define url for pulling protein name from API... IS THERE AN EASIER WAY? 
-        url = f'https://rest.uniprot.org/uniprotkb/search?query=accession:{accession}&organism_id:{organism_id}&columns=protein_name'    
+            url = f'https://rest.uniprot.org/uniprotkb/search?query=accession:{accession}&organism_id:{organism_id}&columns=protein_name'    
     
 ### request uniprot API & print status
-#         response = requests.get(url)
-        with requests.get(url) as response:
-            if response.status_code != 200:
-                raise Exception(f'\nCaution: Link to UniProt API failed for {accession}. Exiting...')
+            with requests.get(url) as response:
+                if response.status_code != 200:
+                    raise Exception(f'\nCaution: Link to UniProt API failed for {accession}. Exiting...')
             
 ### pull data of interest... right now, just uniprotid (for confirmation) & protein name
-#             uniprotid = response.json()['results'][0]['uniProtkbId']
-            protname = response.json()['results'][0]['proteinDescription']['recommendedName']['fullName']['value']
+                protname = response.json()['results'][0]['proteinDescription']['recommendedName']['fullName']['value']
+                self.dict_protnames[accession] = protname
         
 ### message for user
-            if len(protname) > 50:
-                protname_print = protname.split(',')[0]
-            else:
-                protname_print = protname
-            print(f'Working on {accession}... {protname_print}')
+        if len(protname) > 50:
+            protname_print = protname.split(',')[0]
+        else:
+            protname_print = protname
+            
+        print(f'{message}...{protname_print}')
             
 ### close request... not sure this is necessary but can't hurt
 #             response.close()

@@ -167,39 +167,36 @@ df_prot.to_csv(os.path.join(path_outset, f'results-{name_outp}.csv'), index=Fals
 
 ##### DOT PLOT FOR VISUALIZATION OF ENRICHMENT RESULTS.... NEED TO FIGURE OUT FORMATTING WHICH WORKS IN ALL CASES!!!
 #----------------------------------------------------------------------------#
-### format data for dot plot
-# df_plot = df_prot.sort_values(by='fold-change', ascending=False)
+### format data to better organize dot plot
 df_plot = df_prot[df_prot[correction] < alpha].copy()
-
 df_plot.loc[df_plot[df_plot['fold-change'] >= 1.0].index, 'direction'] = '+'
 df_plot.loc[df_plot[df_plot['fold-change'] <= 1.0].index, 'direction'] = '-'
 df_plot.loc[df_plot[df_plot['direction'] == '-'].index, 'fold-change'] = -1 / df_plot['fold-change'] # essentially want negative & positive fold-change to be treated equivalently
-
 df_plot = df_plot.sort_values(by=[correction,'fold-change'], ascending=[True, False])
 
+nprot = 10
+df_plot = df_plot.groupby('Pathway').head(nprot)
 
-nplot = 12
-# df_plot = pd.concat([df_plot[df_plot['direction'] == '+'].head(n=nplot), df_plot[df_plot['direction'] == '-'].tail(n=nplot)])
-df_plot = df_plot.groupby('Pathway').head(nplot)
+npath = 10
+df_plot = df_plot[df_plot['Pathway'].isin(df_plot[df_plot['direction'] == '+']['Pathway'].unique().tolist()[:npath] + df_plot[df_plot['direction'] == '-']['Pathway'].unique().tolist()[:npath])]
 
-
-# df_plot = df_plot.sort_values(by='GenSymbol')
-df_plot['Description'] = df_plot['Description'].str.split().str[:2].str.join(sep=' ')
+df_plot['Description'] = df_plot['Description'].str[:30]
 df_plot['-log10q'] = -np.log10(df_plot['q-value'])
 
 df_plot = df_plot.rename(columns={'fold-change':'Fold Change', '-log10q':'Significance'})
+
 
 ### a hybrid b/w a heat map & a dot plot
 sns.set_theme(style='whitegrid')
 
 hue_norm = (-np.round(np.max(np.abs(df_plot['Fold Change']))), np.round(np.max(np.abs(df_plot['Fold Change']))))
-size_norm = (0, 2) # so far holds up well...
-sizes = (((2 * nplot) * 100) / df_plot.shape[0] , ((2 * nplot) * 500) / df_plot.shape[0])
+# size_norm = (0, 2) # so far holds up well...
+size_norm = (np.min(df_plot['Significance']), np.max(df_plot['Significance'])) 
+sizes = (((2 * nprot) * 100) / df_plot.shape[0] , ((2 * nprot) * 500) / df_plot.shape[0])
 
 g = sns.relplot(data=df_plot, x='GenSymbol', y='Description', hue='Fold Change', size='Significance', palette='vlag', hue_norm=hue_norm, edgecolor='k', height=20, sizes=sizes, size_norm=size_norm)
 
 ### improve plot formatting
-# g.set(xlabel='', ylabel='', title=f'Proteins in Enriched Pathways ({enri.dict_annotset[annotset]})', aspect='equal')
 g.set(xlabel='', ylabel='', title=f'Proteins in Enriched Pathways ({annotset})', aspect='equal')
 g.despine(left=True, bottom=True)
 g.ax.margins(.05)
